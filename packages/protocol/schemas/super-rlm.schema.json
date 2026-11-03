@@ -1,0 +1,1817 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://super-rlm.local/schemas/super-rlm.schema.json",
+  "title": "super-RLM protocol",
+  "description": "Language-neutral v0 contract for super-RLM.",
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "file",
+          "default": "file",
+          "title": "Type",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "mime": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mime"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "AssignmentHeartbeat": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "phase": {
+          "default": "running",
+          "enum": [
+            "running",
+            "waiting",
+            "blocked"
+          ],
+          "title": "Phase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "execution_id"
+      ],
+      "title": "AssignmentHeartbeat",
+      "type": "object"
+    },
+    "CreatedTicket": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TicketStatus"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "title",
+        "status"
+      ],
+      "title": "CreatedTicket",
+      "type": "object"
+    },
+    "ErrorObject": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retryable"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorObject",
+      "type": "object"
+    },
+    "ErrorSource": {
+      "enum": [
+        "prime_agent",
+        "worker",
+        "orchestrator"
+      ],
+      "title": "ErrorSource",
+      "type": "string"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "minimum": 1,
+          "title": "Event Id",
+          "type": "integer"
+        },
+        "type": {
+          "$ref": "#/$defs/EventType"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Id"
+        },
+        "ticket_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ticket Id"
+        },
+        "assignment_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assignment Id"
+        },
+        "worker_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Id"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "type",
+        "created_at"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "EventPage": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Event"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Cursor"
+        }
+      },
+      "required": [
+        "events"
+      ],
+      "title": "EventPage",
+      "type": "object"
+    },
+    "EventType": {
+      "enum": [
+        "task.created",
+        "task.updated",
+        "task.settled",
+        "ticket.created",
+        "ticket.updated",
+        "ticket.waiting",
+        "ticket.blocked",
+        "ticket.settled",
+        "assignment.started",
+        "assignment.ended",
+        "worker.registered",
+        "worker.lost",
+        "report.accepted",
+        "report.rejected"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "ExecutionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "assignment_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Assignment Id",
+          "type": "string"
+        },
+        "prompt": {
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "profile": {
+          "default": "default",
+          "title": "Profile",
+          "type": "string"
+        },
+        "workspace": {
+          "minLength": 1,
+          "title": "Workspace",
+          "type": "string"
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deadline"
+        },
+        "resume": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResumeSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "ticket_id",
+        "assignment_id",
+        "prompt",
+        "workspace"
+      ],
+      "title": "ExecutionRequest",
+      "type": "object"
+    },
+    "ExecutionResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "status": {
+          "const": "accepted",
+          "default": "accepted",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "execution_id"
+      ],
+      "title": "ExecutionResponse",
+      "type": "object"
+    },
+    "Question": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/QuestionKind"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "asked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asked At"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "title": "Question",
+      "type": "object"
+    },
+    "QuestionKind": {
+      "enum": [
+        "waiting",
+        "blocked"
+      ],
+      "title": "QuestionKind",
+      "type": "string"
+    },
+    "ReportAck": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "title": "Accepted",
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "accepted"
+      ],
+      "title": "ReportAck",
+      "type": "object"
+    },
+    "ReportState": {
+      "enum": [
+        "progress",
+        "waiting",
+        "blocked",
+        "completed",
+        "dropped",
+        "failed",
+        "cancelled"
+      ],
+      "title": "ReportState",
+      "type": "string"
+    },
+    "ResumeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "session_ref": {
+          "minLength": 1,
+          "title": "Session Ref",
+          "type": "string"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        }
+      },
+      "required": [
+        "session_ref"
+      ],
+      "title": "ResumeSpec",
+      "type": "object"
+    },
+    "SkillReport": {
+      "additionalProperties": false,
+      "description": "Payload posted by the super-rlm-report skill to the Worker.",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/ReportState"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Question"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "SkillReport",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "waiting"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "question"
+            ],
+            "properties": {
+              "question": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "blocked"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "question"
+            ],
+            "properties": {
+              "question": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "completed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "summary"
+            ],
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "result"
+                ],
+                "properties": {
+                  "result": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "artifacts"
+                ],
+                "properties": {
+                  "artifacts": {
+                    "minItems": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "dropped"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "summary"
+            ],
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "failed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TaskCancelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "TaskCancelRequest",
+      "type": "object"
+    },
+    "TaskCancelResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        }
+      },
+      "required": [
+        "task_id",
+        "status"
+      ],
+      "title": "TaskCancelResponse",
+      "type": "object"
+    },
+    "TaskCreateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "prompt": {
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "tickets": {
+          "items": {
+            "$ref": "#/$defs/TicketCreateSpec"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Tickets",
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "prompt",
+        "tickets"
+      ],
+      "title": "TaskCreateRequest",
+      "type": "object"
+    },
+    "TaskCreateResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "tickets": {
+          "items": {
+            "$ref": "#/$defs/CreatedTicket"
+          },
+          "title": "Tickets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "tickets"
+      ],
+      "title": "TaskCreateResponse",
+      "type": "object"
+    },
+    "TaskListItem": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "ticket_count": {
+          "minimum": 0,
+          "title": "Ticket Count",
+          "type": "integer"
+        },
+        "running_count": {
+          "minimum": 0,
+          "title": "Running Count",
+          "type": "integer"
+        },
+        "waiting_count": {
+          "minimum": 0,
+          "title": "Waiting Count",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "prompt",
+        "ticket_count",
+        "running_count",
+        "waiting_count",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "TaskListItem",
+      "type": "object"
+    },
+    "TaskListRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TaskStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "default": 20,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cursor"
+        }
+      },
+      "title": "TaskListRequest",
+      "type": "object"
+    },
+    "TaskListResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/TaskListItem"
+          },
+          "title": "Tasks",
+          "type": "array"
+        },
+        "next_cursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next Cursor"
+        }
+      },
+      "required": [
+        "tasks"
+      ],
+      "title": "TaskListResponse",
+      "type": "object"
+    },
+    "TaskStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "waiting",
+        "succeeded",
+        "partial",
+        "failed",
+        "cancelled",
+        "timed_out"
+      ],
+      "title": "TaskStatus",
+      "type": "string"
+    },
+    "TaskView": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TaskStatus"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "tickets": {
+          "items": {
+            "$ref": "#/$defs/TicketSummary"
+          },
+          "title": "Tickets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "prompt",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "TaskView",
+      "type": "object"
+    },
+    "TaskWaitRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Task Id",
+          "type": "string"
+        },
+        "timeout_s": {
+          "anyOf": [
+            {
+              "maximum": 3600,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 120,
+          "title": "Timeout S"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "TaskWaitRequest",
+      "type": "object"
+    },
+    "TicketActionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TicketStatus"
+        },
+        "assignment_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assignment Id"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "status"
+      ],
+      "title": "TicketActionResult",
+      "type": "object"
+    },
+    "TicketAnswerRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "message"
+      ],
+      "title": "TicketAnswerRequest",
+      "type": "object"
+    },
+    "TicketCancelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "title": "TicketCancelRequest",
+      "type": "object"
+    },
+    "TicketCancelResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TicketStatus"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "status"
+      ],
+      "title": "TicketCancelResponse",
+      "type": "object"
+    },
+    "TicketCreateSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "prompt": {
+          "minLength": 1,
+          "title": "Prompt",
+          "type": "string"
+        },
+        "profile": {
+          "default": "default",
+          "title": "Profile",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "title",
+        "prompt"
+      ],
+      "title": "TicketCreateSpec",
+      "type": "object"
+    },
+    "TicketResult": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TicketStatus"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Usage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "session_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Ref"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "no_op": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "No Op"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "status"
+      ],
+      "title": "TicketResult",
+      "type": "object"
+    },
+    "TicketResumeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "title": "TicketResumeRequest",
+      "type": "object"
+    },
+    "TicketRetryRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "ticket_id"
+      ],
+      "title": "TicketRetryRequest",
+      "type": "object"
+    },
+    "TicketStatus": {
+      "enum": [
+        "queued",
+        "assigned",
+        "running",
+        "waiting",
+        "blocked",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "timed_out",
+        "lost"
+      ],
+      "title": "TicketStatus",
+      "type": "string"
+    },
+    "TicketSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TicketStatus"
+        },
+        "profile": {
+          "default": "default",
+          "title": "Profile",
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Question"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome"
+        },
+        "no_op": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "No Op"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "title",
+        "status"
+      ],
+      "title": "TicketSummary",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": true,
+      "properties": {
+        "total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Tokens"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "cost_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Usd"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    },
+    "WorkerHeartbeat": {
+      "additionalProperties": false,
+      "properties": {
+        "running": {
+          "minimum": 0,
+          "title": "Running",
+          "type": "integer"
+        },
+        "max_concurrency": {
+          "minimum": 1,
+          "title": "Max Concurrency",
+          "type": "integer"
+        },
+        "status": {
+          "default": "healthy",
+          "enum": [
+            "healthy",
+            "draining"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "running",
+        "max_concurrency"
+      ],
+      "title": "WorkerHeartbeat",
+      "type": "object"
+    },
+    "WorkerRegistration": {
+      "additionalProperties": false,
+      "properties": {
+        "worker_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Worker Id",
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "max_concurrency": {
+          "minimum": 1,
+          "title": "Max Concurrency",
+          "type": "integer"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "worker_id",
+        "url",
+        "max_concurrency",
+        "version"
+      ],
+      "title": "WorkerRegistration",
+      "type": "object"
+    },
+    "WorkerReport": {
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Ticket Id",
+          "type": "string"
+        },
+        "assignment_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Assignment Id",
+          "type": "string"
+        },
+        "execution_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "idempotency_key": {
+          "minLength": 1,
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ReportState"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "maxLength": 2048,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Usage"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorObject"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "session_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Ref"
+        },
+        "resumed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resumed"
+        },
+        "recovery": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recovery"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Question"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticket_id",
+        "assignment_id",
+        "execution_id",
+        "seq",
+        "idempotency_key",
+        "state",
+        "timestamp"
+      ],
+      "title": "WorkerReport",
+      "type": "object",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "waiting"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "question"
+            ],
+            "properties": {
+              "question": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "blocked"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "question"
+            ],
+            "properties": {
+              "question": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "completed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "summary"
+            ],
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "result"
+                ],
+                "properties": {
+                  "result": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "artifacts"
+                ],
+                "properties": {
+                  "artifacts": {
+                    "minItems": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "dropped"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "summary"
+            ],
+            "properties": {
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "failed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

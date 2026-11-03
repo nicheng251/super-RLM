@@ -24,7 +24,8 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - Spike 结果：
   - `docs/spikes/pi-router.md`：Router 只暴露 6 个控制面工具；伪 `bash` 调用被拒绝。
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
-- 下一阶段是最小 Orchestrator + Worker 垂直切片；发行、安装器、打包暂不做。
+- `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；16 个 Python 测试通过，`tsc --noEmit` 通过。
+- 下一阶段是 Orchestrator + Worker 垂直切片；发行、安装器、打包暂不做。
 
 当前实现缺口：
 
@@ -40,6 +41,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 apps/router/.pi/settings.json
 apps/router/extensions/super-rlm.ts          # 6 个控制面工具，spike 级
 apps/worker/skills/super-rlm-report/        # Python report skill
+packages/protocol/                          # v0 JSON Schema + Python/TS types
 spikes/                                     # fake LLM、mock Orchestrator、ACP probes
 runtime/manifest.json                       # Pi 1.5.0 / Prime 0.10.2；Node 为宿主机依赖
 runtime/pi/                                 # 本地 Pi package（node_modules ignored）
@@ -290,7 +292,7 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 ## 9. 下一步：最小垂直切片
 
 0. Baseline 已提交（`c530a5a`）。
-1. 建立 `packages/protocol` 的最小 JSON Schema 和 TypeScript/Python 类型。
+1. [done] 建立 `packages/protocol` 的最小 JSON Schema 和 TypeScript/Python 类型。
 2. 实现 Orchestrator 的最小状态机、SQLite 存储、slot 和 mock/real Worker dispatch。
 3. 实现 Worker 的 ACP 生命周期：`initialize` -> `session/new` -> `session/prompt`，report skill，session_ref 发现与 resume。
 4. 补 Router 缺失工具：`ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`。
