@@ -5,6 +5,7 @@
  * Control plane only: every tool talks to the Orchestrator HTTP API.
  * This file must never import a shell, filesystem, or code-execution helper.
  */
+import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -17,16 +18,24 @@ type ToolResult = {
   isError?: boolean;
 };
 
-async function call(method: string, path: string, body?: unknown, timeoutMs = 30_000): Promise<unknown> {
+async function call(
+  method: string,
+  path: string,
+  body?: unknown,
+  timeoutMs = 30_000,
+  idempotencyKey?: string,
+): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    authorization: `Bearer ${TOKEN}`,
+  };
+  if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
   try {
     const res = await fetch(`${BASE}${path}`, {
       method,
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${TOKEN}`,
-      },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
     });
@@ -143,6 +152,96 @@ export default function (pi: ExtensionAPI) {
       try {
         const q = params.max_chars === undefined ? "" : `?max_chars=${params.max_chars}`;
         return ok(await call("GET", `/v1/tickets/${encodeURIComponent(params.ticket_id)}/result${q}`));
+      } catch (e) { return fail(e); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ticket_answer",
+    label: "Answer Ticket",
+    description: "Answer a Ticket in waiting state. The answer is stored and the same Prime Agent session is resumed.",
+    parameters: Type.Object({
+      ticket_id: Type.String(),
+      message: Type.String({ description: "The user's answer." }),
+    }),
+    async execute(_id, params) {
+      try {
+        return ok(await call(
+          "POST", `/v1/tickets/${encodeURIComponent(params.ticket_id)}/answer`,
+          { message: params.message }, 30_000, randomUUID(),
+        ));
+      } catch (e) { return fail(e); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ticket_resume",
+    label: "Resume Ticket",
+    description: "Resume a Ticket in blocked state after the external condition is resolved.",
+    parameters: Type.Object({
+      ticket_id: Type.String(),
+      note: Type.Optional(Type.String({ description: "What changed." })),
+    }),
+    async execute(_id, params) {
+      try {
+        return ok(await call(
+          "POST", `/v1/tickets/${encodeURIComponent(params.ticket_id)}/resume`,
+          { note: params.note ?? null }, 30_000, randomUUID(),
+        ));
+      } catch (e) { return fail(e); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ticket_retry",
+    label: "Retry Ticket",
+    description: "Retry a Ticket in failed or lost state.",
+    parameters: Type.Object({
+      ticket_id: Type.String(),
+      note: Type.Optional(Type.String({ description: "Extra context for the retry." })),
+    }),
+    async execute(_id, params) {
+      try {
+        return ok(await call(
+          "POST", `/v1/tickets/${encodeURIComponent(params.ticket_id)}/retry`,
+          { note: params.note ?? null }, 30_000, randomUUID(),
+        ));
+      } catch (e) { return fail(e); }
+    },
+  });
+
+  pi.registerTool({
+    name: "ticket_cancel",
+    label: "Cancel Ticket",
+    description: "Cancel one Ticket and its active Assignment.",
+    parameters: Type.Object({
+      ticket_id: Type.String(),
+      reason: Type.Optional(Type.String()),
+    }),
+    async execute(_id, params) {
+      try {
+        return ok(await call(
+          "POST", `/v1/tickets/${encodeURIComponent(params.ticket_id)}/cancel`,
+          { reason: params.reason ?? null }, 30_000, randomUUID(),
+        ));
+      } catch (e) { return fail(e); }
+    },
+  });
+
+  pi.registerTool({
+    name: "task_cancel",
+    label: "Cancel Task",
+    description: "Cancel a Task and all of its active Tickets.",
+    parameters: Type.Object({
+      task_id: Type.String(),
+      reason: Type.Optional(Type.String()),
+    }),
+    async execute(_id, params) {
+      try {
+        return ok(await call(
+          "POST", `/v1/tasks/${encodeURIComponent(params.task_id)}/cancel`,
+          { reason: params.reason ?? null }, 30_000, randomUUID(),
+        ));
       } catch (e) { return fail(e); }
     },
   });
