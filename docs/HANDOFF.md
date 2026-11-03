@@ -1,6 +1,6 @@
 # super-RLM Handoff
 
-Status: architecture decision design complete; both local spikes passed; core implementation not started. Baseline committed at `c530a5a`.  
+Status: architecture decision design complete; both local spikes passed; core vertical slice works end-to-end. Baseline committed at `c530a5a`.  
 Last updated: 2026-11-03
 
 ## 1. 项目一句话
@@ -26,14 +26,17 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；16 个 Python 测试通过，`tsc --noEmit` 通过。
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch；13 个 `node:test` 测试通过。
-- 下一阶段是 Worker ACP 适配器；发行、安装器、打包暂不做。
+- `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、heartbeat；8 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
+- 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
+- 下一阶段是补 Router 工具/SSE 和 `super-rlm` CLI；发行、安装器、打包暂不做。
 
 当前实现缺口：
 
-- 没有 Worker service、`super-rlm` CLI。
+- 没有 `super-rlm` CLI。
+- Router 只有 6 个 spike 工具，缺 `ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`，也没有 SSE 通知。
 - Orchestrator 还缺目录锁、forward-only migration runner、outbox/启动恢复、SSE、HMAC。
-- Router extension 只有 6 个 spike 工具，缺 `ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`，也没有 SSE 通知。
-- 没有生产级 auth、SQLite、migration、backup、model sync。
+- Worker 还缺 assignment heartbeat、HMAC report、profile prepare/blocked commands、容器隔离。
+- 没有生产级 auth、migration runner、backup、model sync；SQLite 只有 v1 schema。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；需要 bootstrap 脚本。
 - Baseline 已提交（`c530a5a`）；后续文档提交会在此之后产生新的 commit。
 
@@ -43,6 +46,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 apps/router/.pi/settings.json
 apps/router/extensions/super-rlm.ts          # 6 个控制面工具，spike 级
 apps/orchestrator/                           # 最小 TS 控制面：状态机/SQLite/slot/dispatch
+apps/worker/                                 # Python FastAPI + Prime Agent ACP adapter
 apps/worker/skills/super-rlm-report/        # Python report skill
 packages/protocol/                          # v0 JSON Schema + Python/TS types
 spikes/                                     # fake LLM、mock Orchestrator、ACP probes
@@ -297,10 +301,10 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 0. Baseline 已提交（`c530a5a`）。
 1. [done] 建立 `packages/protocol` 的最小 JSON Schema 和 TypeScript/Python 类型。
 2. [done] 实现 Orchestrator 的最小状态机、SQLite 存储、slot 和 mock/real Worker dispatch。
-3. 实现 Worker 的 ACP 生命周期：`initialize` -> `session/new` -> `session/prompt`，report skill，session_ref 发现与 resume。
+3. [done] 实现 Worker 的 ACP 生命周期：`initialize` -> `session/new` -> `session/prompt`，report skill，session_ref 发现与 resume。
 4. 补 Router 缺失工具：`ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`。
 5. 实现 Router SSE 通知 + `pi.sendMessage`。
-6. 跑通 CLI -> Router -> Orchestrator -> Worker -> Prime Agent 的第一个本地任务。
+6. [done, manual] 跑通 Orchestrator -> Worker -> Prime Agent 的第一个本地任务；CLI/Router 链路待补。
 7. L2 Chat/Tasks/Task Detail 页面后置。
 
 ## 10. 不要做的事
