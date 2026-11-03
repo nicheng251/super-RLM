@@ -60,6 +60,74 @@ function fail(err: unknown): ToolResult {
   return { content: [{ type: "text", text: message }], details: {}, isError: true };
 }
 
+type SuperRlmEvent = {
+  event_id?: number;
+  type?: string;
+  task_id?: string | null;
+  ticket_id?: string | null;
+  data?: Record<string, unknown>;
+};
+
+function actionable(event: SuperRlmEvent): boolean {
+  return event.type === "ticket.waiting"
+    || event.type === "ticket.blocked"
+    || event.type === "task.settled";
+}
+
+function eventText(event: SuperRlmEvent): string {
+  const task = event.task_id ? `Task ${event.task_id}` : "A Task";
+  const ticket = event.ticket_id ? `Ticket ${event.ticket_id}` : "A Ticket";
+  if (event.type === "ticket.waiting" || event.type === "ticket.blocked") {
+    const question = (event.data?.question as { text?: string } | undefined)?.text;
+    const label = event.type === "ticket.waiting" ? "needs an answer" : "is blocked";
+    return `${ticket} ${label}${question ? `: ${question}` : "."} (${task})`;
+  }
+  const status = (event.data?.status as string | undefined) ?? "settled";
+  return `${task} ${status}. Use task_status or ticket_result to read the result.`;
+}
+
+async function runEventLoop(pi: ExtensionAPI, signal: AbortSignal): Promise<void> {
+  let cursor = 0;
+  let lastNotify = 0;
+  while (!signal.aborted) {
+    try {
+      const response = await fetch(`${BASE}/v1/events?after=${cursor}`, {
+        headers: { authorization: `Bearer ${TOKEN}` },
+        signal,
+      });
+      if (!response.ok || !response.body) throw new Error(`event stream ${response.status}`);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (!signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+        for (const frame of frames) {
+          const dataLine = frame.split("\n").find((line) => line.startsWith("data: "));
+          if (!dataLine) continue;
+          let event: SuperRlmEvent;
+          try { event = JSON.parse(dataLine.slice(6)) as SuperRlmEvent; } catch { continue; }
+          if (typeof event.event_id === "number") cursor = Math.max(cursor, event.event_id);
+          if (!actionable(event)) continue;
+          const now = Date.now();
+          if (now - lastNotify < 5_000) continue;
+          lastNotify = now;
+          pi.sendMessage(
+            { customType: "super-rlm", content: eventText(event), display: true },
+            { deliverAs: "followUp", triggerTurn: true },
+          );
+        }
+      }
+    } catch (error) {
+      if (signal.aborted) return;
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+    }
+  }
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "profile_list",
@@ -244,5 +312,16 @@ export default function (pi: ExtensionAPI) {
         ));
       } catch (e) { return fail(e); }
     },
+  });
+
+  let eventAbort: AbortController | null = null;
+  pi.on("session_start", async () => {
+    eventAbort?.abort();
+    eventAbort = new AbortController();
+    void runEventLoop(pi, eventAbort.signal);
+  });
+  pi.on("session_shutdown", async () => {
+    eventAbort?.abort();
+    eventAbort = null;
   });
 }

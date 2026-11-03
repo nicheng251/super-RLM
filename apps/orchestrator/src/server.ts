@@ -7,6 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { setTimeout as sleep } from "node:timers/promises";
 import type { AddressInfo } from "node:net";
 import type { WorkerHeartbeat, WorkerRegistration, WorkerReport } from "../../../packages/protocol/ts/index.ts";
 import { Orchestrator, OrchestratorError } from "./orchestrator.ts";
@@ -103,12 +104,12 @@ async function routeRouter(
     return sendJson(res, 200, await orchestrator.waitForTask(segments[2], Number.isFinite(timeout) ? timeout : 120));
   }
 
+  if (method === "GET" && url.pathname === "/v1/events") {
+    return streamEvents(req, res, orchestrator, undefined, Number(url.searchParams.get("after") ?? "0"));
+  }
+
   if (segments[1] === "tasks" && segments[2] && segments[3] === "events" && method === "GET") {
-    const after = Number(url.searchParams.get("after") ?? "0");
-    return sendJson(res, 200, {
-      events: orchestrator.store.listEvents(segments[2], Number.isFinite(after) ? after : 0),
-      next_cursor: null,
-    });
+    return streamEvents(req, res, orchestrator, segments[2], Number(url.searchParams.get("after") ?? "0"));
   }
 
   if (segments[1] === "tasks" && segments[2] && segments[3] === "cancel" && method === "POST") {
@@ -176,6 +177,33 @@ async function routeWorker(
   }
 
   return sendJson(res, 404, NOT_FOUND);
+}
+
+async function streamEvents(
+  req: IncomingMessage,
+  res: ServerResponse,
+  orchestrator: Orchestrator,
+  taskId: string | undefined,
+  afterInput: number,
+): Promise<void> {
+  res.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-cache",
+    "connection": "keep-alive",
+  });
+  res.write(": connected\n\n");
+  let after = Number.isFinite(afterInput) ? afterInput : 0;
+  let closed = false;
+  req.on("close", () => { closed = true; });
+  while (!closed) {
+    const events = orchestrator.store.listEvents(taskId, after, 100);
+    for (const event of events) {
+      res.write(`id: ${event.event_id}\ndata: ${JSON.stringify(event)}\n\n`);
+      after = Number(event.event_id);
+    }
+    await sleep(500);
+  }
+  res.end();
 }
 
 function authorized(req: IncomingMessage, expected: string): boolean {

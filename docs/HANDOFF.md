@@ -33,9 +33,9 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 当前实现缺口：
 
 - 没有 `super-rlm` CLI。
-- Router 只有 6 个 spike 工具，缺 `ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`，也没有 SSE 通知。
-- Orchestrator 还缺目录锁、forward-only migration runner、outbox/启动恢复、SSE、HMAC。
+- Orchestrator 还缺目录锁、forward-only migration runner、outbox/启动恢复、HMAC。
 - Worker 还缺 assignment heartbeat、HMAC report、profile prepare/blocked commands、容器隔离。
+- Router SSE 通知只在端点层验证，尚未在交互/RPC 模式下验证唤醒。
 - 没有生产级 auth、migration runner、backup、model sync；SQLite 只有 v1 schema。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；需要 bootstrap 脚本。
 - Baseline 已提交（`c530a5a`）；后续文档提交会在此之后产生新的 commit。
@@ -44,7 +44,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 
 ```text
 apps/router/.pi/settings.json
-apps/router/extensions/super-rlm.ts          # 6 个控制面工具，spike 级
+apps/router/extensions/super-rlm.ts          # 11 个控制面工具 + SSE 通知
 apps/orchestrator/                           # 最小 TS 控制面：状态机/SQLite/slot/dispatch
 apps/worker/                                 # Python FastAPI + Prime Agent ACP adapter
 apps/worker/skills/super-rlm-report/        # Python report skill
@@ -302,8 +302,8 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 1. [done] 建立 `packages/protocol` 的最小 JSON Schema 和 TypeScript/Python 类型。
 2. [done] 实现 Orchestrator 的最小状态机、SQLite 存储、slot 和 mock/real Worker dispatch。
 3. [done] 实现 Worker 的 ACP 生命周期：`initialize` -> `session/new` -> `session/prompt`，report skill，session_ref 发现与 resume。
-4. 补 Router 缺失工具：`ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`。
-5. 实现 Router SSE 通知 + `pi.sendMessage`。
+4. [done] 补 Router 缺失工具：`ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`。
+5. [done] 实现 Router SSE 通知 + `pi.sendMessage`；交互/RPC 模式下的唤醒验证待补。
 6. [done, manual] 跑通 Orchestrator -> Worker -> Prime Agent 的第一个本地任务；CLI/Router 链路待补。
 7. L2 Chat/Tasks/Task Detail 页面后置。
 
@@ -322,8 +322,8 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 ## 11. 建议的下一个对话开场
 
 > 先读 `docs/HANDOFF.md`、`docs/spikes/pi-router.md`、`docs/spikes/prime-acp.md` 和 `docs/protocol/`。  
-> 两个 spike 已通过，baseline 已提交；当前阶段是最小 Orchestrator + Worker 垂直切片。  
-> 不要重做 spike；先实现本地闭环，再补 Router 缺失工具和 SSE 通知。
+> 两个 spike 已通过；协议、Orchestrator、Worker、Router 工具/SSE 已实现。  
+> 下一步是 `super-rlm` CLI、交互/RPC 模式下的 SSE 唤醒验证，以及 L2 页面。
 
 ## 12. 相关文件索引
 

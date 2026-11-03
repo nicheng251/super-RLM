@@ -33,6 +33,25 @@ class Handler(BaseHTTPRequestHandler):
         log({"method": "GET", "path": self.path, "auth": self._auth_ok()})
         if not self._auth_ok():
             return self._send(401, {"error": {"code": "invalid_token", "message": "bad token"}})
+        if self.path.startswith("/v1/events"):
+            self.send_response(200)
+            self.send_header("content-type", "text/event-stream; charset=utf-8")
+            self.send_header("cache-control", "no-cache")
+            self.send_header("connection", "close")
+            self.end_headers()
+            self.wfile.write(b": connected\n\n")
+            event = {
+                "event_id": 1,
+                "type": "ticket.waiting",
+                "task_id": "tsk_mock_1",
+                "ticket_id": "tkt_mock_1",
+                "data": {"question": {"kind": "waiting", "text": "Linux or Windows?"}},
+                "created_at": "2026-11-03T00:00:00Z",
+            }
+            self.wfile.write(("id: 1\ndata: " + json.dumps(event) + "\n\n").encode())
+            self.wfile.flush()
+            time.sleep(30)
+            return
         if self.path == "/v1/profiles":
             return self._send(200, {"profiles": [
                 {"name": "default", "description": "General-purpose worker", "model": "default", "thinking": "medium"}

@@ -29,7 +29,7 @@ No user Pi configuration was read. `~/.pi` does not exist.
 }
 ```
 
-The extension registers six control-plane tools and uses only `fetch`:
+The extension registers eleven control-plane tools and uses only `fetch`:
 
 - `profile_list`
 - `task_create`
@@ -37,6 +37,11 @@ The extension registers six control-plane tools and uses only `fetch`:
 - `task_status`
 - `task_wait`
 - `ticket_result`
+- `ticket_answer`
+- `ticket_resume`
+- `ticket_retry`
+- `ticket_cancel`
+- `task_cancel`
 
 The launch command used defense in depth:
 
@@ -59,10 +64,13 @@ node runtime/pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js 
 
 ### Tool surface
 
-Every model request declared exactly these tools:
+The spike run declared the original six tools. After the spike, the extension
+was extended with the five action tools above; a second run declared all eleven
+and executed `task_create` / `task_wait` against the mock Orchestrator.
 
 ```text
-profile_list, task_create, task_list, task_status, task_wait, ticket_result
+profile_list, task_create, task_list, task_status, task_wait, ticket_result,
+ticket_answer, ticket_resume, ticket_retry, ticket_cancel, task_cancel
 ```
 
 No `bash`, `read`, `write`, `edit`, `grep`, `find`, `ls`, `codemode`, `tool_search`, or MCP tools were declared.
@@ -117,3 +125,16 @@ Pi needs a Node.js runtime. Node is a user-provided host prerequisite and is not
 ## Verdict
 
 Pass. The Router can run with control-plane tools only, call the Orchestrator contract, and reject built-in tool calls.
+
+
+## Post-spike additions
+
+- Added `ticket_answer`, `ticket_resume`, `ticket_retry`, `ticket_cancel`, and `task_cancel`.
+- Mutating calls send an `Idempotency-Key`.
+- Added an SSE subscription to `GET /v1/events` on `session_start`.
+  - Reconnects with the last event cursor.
+  - Only `ticket.waiting`, `ticket.blocked`, and `task.settled` wake the Router.
+  - Notifications are deduplicated by cursor and throttled to one per 5 seconds.
+- The SSE notification path was not verified in `--print` mode because one-shot
+  Pi exits before a queued follow-up turn. It needs an interactive or RPC
+  verification.
