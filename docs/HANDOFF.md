@@ -32,7 +32,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - Router extension 只有 6 个 spike 工具，缺 `ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`，也没有 SSE 通知。
 - 没有生产级 auth、SQLite、migration、backup、model sync。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；需要 bootstrap 脚本。
-- Baseline 已提交（`c530a5a`）；当前仓库有两个 commit。
+- Baseline 已提交（`c530a5a`）；后续文档提交会在此之后产生新的 commit。
 
 当前已存在的代码/资产：
 
@@ -52,9 +52,8 @@ Git 状态：
 
 ```text
 branch: main
-commits: 2 (initial + baseline)
-working tree: clean
 baseline: c530a5a
+working tree: clean after the baseline-record commit
 ```
 
 当前仓库：
@@ -314,7 +313,7 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 ## 11. 建议的下一个对话开场
 
 > 先读 `docs/HANDOFF.md`、`docs/spikes/pi-router.md`、`docs/spikes/prime-acp.md` 和 `docs/protocol/`。  
-> 两个 spike 已通过，但核心实现还没开始；当前阶段是提交 baseline，然后做最小 Orchestrator + Worker 垂直切片。  
+> 两个 spike 已通过，baseline 已提交；当前阶段是最小 Orchestrator + Worker 垂直切片。  
 > 不要重做 spike；先实现本地闭环，再补 Router 缺失工具和 SSE 通知。
 
 ## 12. 相关文件索引
