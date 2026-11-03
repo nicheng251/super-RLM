@@ -1,6 +1,6 @@
 # super-RLM Handoff
 
-Status: architecture decision design complete; both local spikes passed; core implementation not started; current work is uncommitted.  
+Status: architecture decision design complete; both local spikes passed; core implementation not started. Baseline committed at `c530a5a`.  
 Last updated: 2026-11-03
 
 ## 1. 项目一句话
@@ -32,7 +32,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - Router extension 只有 6 个 spike 工具，缺 `ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`，也没有 SSE 通知。
 - 没有生产级 auth、SQLite、migration、backup、model sync。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；需要 bootstrap 脚本。
-- 所有文件仍未提交；仓库只有 initial commit。
+- Baseline 已提交（`c530a5a`）；当前仓库有两个 commit。
 
 当前已存在的代码/资产：
 
@@ -52,8 +52,9 @@ Git 状态：
 
 ```text
 branch: main
-commits: 1 (initial)
-working tree: apps/, docs/, runtime/, spikes/ 全部 untracked
+commits: 2 (initial + baseline)
+working tree: clean
+baseline: c530a5a
 ```
 
 当前仓库：
@@ -289,7 +290,7 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 
 ## 9. 下一步：最小垂直切片
 
-0. 先提交当前 baseline，避免 untracked 内容丢失。
+0. Baseline 已提交（`c530a5a`）。
 1. 建立 `packages/protocol` 的最小 JSON Schema 和 TypeScript/Python 类型。
 2. 实现 Orchestrator 的最小状态机、SQLite 存储、slot 和 mock/real Worker dispatch。
 3. 实现 Worker 的 ACP 生命周期：`initialize` -> `session/new` -> `session/prompt`，report skill，session_ref 发现与 resume。
