@@ -1,0 +1,6 @@
+{
+  "defaultTools": [],
+  "extensions": [
+    "./extensions/super-rlm.ts"
+  ]
+}

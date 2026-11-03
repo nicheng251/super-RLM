@@ -1,0 +1,14 @@
+# project-local marker
+.super-rlm-project.json
+
+# generated runtimes / binaries
+runtime/pi/node_modules/
+runtime/prime-agent/
+
+# spike artifacts
+spikes/logs/
+
+# local development state
+.venv/
+__pycache__/
+*.pyc

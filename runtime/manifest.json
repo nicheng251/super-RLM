@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-11-03T13:27:00.419844+00:00",
+  "host_requirements": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "package": "@earendil-works/pi-coding-agent",
+    "version": "1.5.0",
+    "path": "runtime/pi",
+    "entry": "node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js"
+  },
+  "prime_agent": {
+    "version": "0.10.2",
+    "platform": "win32-x64",
+    "path": "runtime/prime-agent/prime-agent.exe",
+    "sha256": "d9d1e4724f8da5a2fa5cf8e0063831200b97e99bd6aa1696c02e3c845dacb74b",
+    "runtime_package": "runtime/prime-agent/prime-agent-runtime",
+    "runtime_version": "0.1.0"
+  }
+}
