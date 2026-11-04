@@ -30,8 +30,9 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `apps/cli` 最小实现已完成：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config` 可用；4 个 `node:test` 通过；`up/status/down` 已手动验证。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
+- 已用真实 DeepSeek `deepseek-flash` 跑通：写文件任务成功（`hello.txt` 内容正确），以及 TUI 中 `/tasks` -> Task Detail -> 回答 -> resume -> succeeded。
 - 发现并修复 resident kernel 环境过期问题：Worker 在每个 workspace 写 `.super-rlm-report.json`，skill 通过 `SUPER_RLM_REPORT_CONFIG` 每次读取当前 assignment 的 report URL/token。
-- 下一阶段是 L2 页面的交互式视觉验证和生产化加固；发行、安装器、打包暂不做。
+- 下一阶段是 backup/restore、per-profile 命令、Worker 容器隔离和真实模型回归；发行、安装器、打包暂不做。
 
 当前实现缺口：
 
@@ -39,7 +40,6 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - Worker 还缺 per-Worker control token、profile prepare/blocked commands、容器隔离。
 - 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
 - HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
-- L2 页面只做了类型检查和加载 smoke，尚未在真实 TUI 中逐项验证按键、刷新和动作。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
 - 没有 backup；SQLite 当前 schema v2。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；`super-rlm bootstrap` 已覆盖 kernel venv 和 report skill，但 Pi package 仍需首次 npm install。
@@ -96,6 +96,7 @@ remote: https://github.com/nicheng251/super-RLM.git
 11. `docs/spikes/plan.md`
 12. `docs/spikes/pi-router.md`（spike 结果）
 13. `docs/spikes/prime-acp.md`（spike 结果）
+14. `docs/spikes/tui-pages.md`（L2 TUI 验证）
 
 ## 4. 架构总览
 
@@ -312,7 +313,7 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 4. [done] 补 Router 缺失工具：`ticket_answer`、`ticket_resume`、`ticket_retry`、`ticket_cancel`、`task_cancel`。
 5. [done] 实现 Router SSE 通知 + `pi.sendMessage`；交互/RPC 模式下的唤醒验证待补。
 6. [done, manual] 跑通 Orchestrator -> Worker -> Prime Agent 的第一个本地任务；CLI/Router 链路待补。
-7. [done, UI pending verification] L2 Tasks / Task Detail 页面；Chat 仍是普通 Pi session。
+7. [done] L2 Tasks / Task Detail 页面；已在真实 TUI 中用 DeepSeek 验证。
 8. [done] 写 `apps/cli` 的 `super-rlm` 启动器；默认一键拉起后台 Orchestrator/Worker 再启动 Router，另有 `up/down/status`。
 9. [done] 在 RPC 模式下验证 SSE 唤醒（`spikes/pi_sse_rpc_probe.py`）。
 10. [done] 补完整的 Orchestrator + Worker HITL 联调（waiting -> answer -> resume -> completed）。

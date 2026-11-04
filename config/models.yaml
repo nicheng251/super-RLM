@@ -1,19 +1,29 @@
-# Local development model. Used by the fake-provider spike harness.
-# Replace with config/models.example.yaml for a real provider.
+# Project model registry.
+#
+# The API key is referenced, never committed. Put DEEPSEEK_API_KEY in
+# <SUPER_RLM_HOME>/secrets/providers.env or the process environment.
 
 providers:
-  fake:
-    name: Fake local model
+  deepseek:
+    name: DeepSeek
     api: openai-completions
-    baseUrl: http://127.0.0.1:18901/v1
-    apiKey: fake-key
+    baseUrl: https://api.deepseek.com/v1
+    apiKey: $DEEPSEEK_API_KEY
     authHeader: true
     models:
-      - id: fake-1
-        name: Fake 1
+      - id: deepseek-flash
+        name: DeepSeek V4.1 Flash
         api: openai-completions
-        reasoning: false
-        input: [text]
+        reasoning: true
+        input: [text, image]
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
-        contextWindow: 128000
-        maxTokens: 8192
+        contextWindow: 1048576
+        maxTokens: 393216
+        thinkingLevelMap:
+          off: null
+          minimal: low
+          low: low
+          medium: high
+          high: high
+          xhigh: max
+          max: max
