@@ -1,5 +1,6 @@
 
 import { loadConfig, type RouterOptions } from "./config.ts";
+import { runBootstrap } from "./commands/bootstrap.ts";
 import { runDev } from "./commands/dev.ts";
 import { runDoctor } from "./commands/doctor.ts";
 import { runInit } from "./commands/init.ts";
@@ -20,6 +21,7 @@ Usage:
   super-rlm tasks [--json] [--limit <n>]
   super-rlm doctor [--json]
   super-rlm init                 Create .super-rlm-project.json
+  super-rlm bootstrap [--dry-run]  Prepare the project kernel venv and report skill
   super-rlm config               Print resolved configuration
 
 Node is a host prerequisite (>= 22.19). The project owns Pi and Prime Agent.`);
@@ -71,6 +73,7 @@ async function main(): Promise<number> {
     return 0;
   }
   if (command === "init") return runInit();
+  if (command === "bootstrap") return runBootstrap(loadConfig(), { dryRun: rest.includes("--dry-run") });
 
   if (command === "router") {
     const parsed = parseRouterArgs(rest);

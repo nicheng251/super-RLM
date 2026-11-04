@@ -15,6 +15,7 @@ super-rlm dev             # start Orchestrator + Worker in the foreground
 super-rlm tasks           # headless task list
 super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
+super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
 super-rlm config          # print resolved paths and tokens
 ```
 
@@ -46,6 +47,18 @@ Set a non-default runtime root explicitly:
 SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm dev
 SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm
 ```
+
+## Bootstrap
+
+`super-rlm bootstrap` creates `<home>/prime/kernel-venv` with `uv` and installs:
+
+- `prime-agent-runtime` and its `mcp`/`tyro` dependencies
+- the default kernel packages (`requests`, `httpx`, `pyyaml`, `tomli`, `python-dotenv`, `pandas`, `numpy`, `scipy`, `beautifulsoup4`, `lxml`)
+- `apps/worker/skills/super-rlm-report` editable
+
+Use `super-rlm bootstrap --dry-run` to print the commands without running them.
+It does not configure model providers; create `models.json` in the project Pi/Prime
+agent dirs next.
 
 ## Background services
 
