@@ -27,12 +27,12 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；16 个 Python 测试通过，`tsc --noEmit` 通过。
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE；14 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、heartbeat；8 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
+- `apps/cli` 最小实现已完成：`super-rlm router/dev/tasks/doctor/init/config`；4 个 `node:test` 通过；`super-rlm dev` 和 `super-rlm router` 已手动验证。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
-- 下一阶段是 `super-rlm` CLI、交互/RPC 模式下的 SSE 唤醒验证、完整 HITL 联调和 L2 页面；发行、安装器、打包暂不做。
+- 下一阶段是交互/RPC 模式下的 SSE 唤醒验证、完整 HITL 联调和 L2 页面；发行、安装器、打包暂不做。
 
 当前实现缺口：
 
-- 没有 `super-rlm` CLI。
 - Orchestrator 还缺目录锁、forward-only migration runner、outbox/启动恢复、HMAC。
 - Worker 还缺 assignment heartbeat、HMAC report、profile prepare/blocked commands、容器隔离。
 - Router SSE 通知只在端点层验证，尚未在交互/RPC 模式下验证唤醒。
@@ -45,6 +45,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 ```text
 apps/router/.pi/settings.json
 apps/router/extensions/super-rlm.ts          # 11 个控制面工具 + SSE 通知
+apps/cli/                                    # super-rlm 启动器：router/dev/tasks/doctor/init
 apps/orchestrator/                           # 最小 TS 控制面：状态机/SQLite/slot/dispatch
 apps/worker/                                 # Python FastAPI + Prime Agent ACP adapter
 apps/worker/skills/super-rlm-report/        # Python report skill
@@ -307,7 +308,7 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 5. [done] 实现 Router SSE 通知 + `pi.sendMessage`；交互/RPC 模式下的唤醒验证待补。
 6. [done, manual] 跑通 Orchestrator -> Worker -> Prime Agent 的第一个本地任务；CLI/Router 链路待补。
 7. L2 Chat/Tasks/Task Detail 页面后置。
-8. 写 `apps/cli` 的 `super-rlm` 启动器。
+8. [done] 写 `apps/cli` 的 `super-rlm` 启动器（router/dev/tasks/doctor/init/config）。
 9. 在交互/RPC 模式下验证 SSE 唤醒。
 10. 补完整的 Orchestrator + Worker HITL 联调。
 
@@ -326,8 +327,8 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 ## 11. 建议的下一个对话开场
 
 > 先读 `docs/HANDOFF.md`、`docs/spikes/pi-router.md`、`docs/spikes/prime-acp.md` 和 `docs/protocol/`。  
-> 两个 spike 已通过；协议、Orchestrator、Worker、Router 工具/SSE 已实现。  
-> 下一步是 `super-rlm` CLI、交互/RPC 模式下的 SSE 唤醒验证，以及 L2 页面。
+> 两个 spike 已通过；协议、Orchestrator、Worker、Router 工具/SSE、`super-rlm` CLI 已实现。  
+> 下一步是交互/RPC 模式下的 SSE 唤醒验证、完整 HITL 联调和 L2 页面。
 
 ## 12. 相关文件索引
 

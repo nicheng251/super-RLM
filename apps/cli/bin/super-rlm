@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NODE_BIN="${NODE_BIN:-node}"
+if ! command -v "$NODE_BIN" >/dev/null 2>&1; then
+  if [ -x "/c/Program Files/nodejs/node.exe" ]; then
+    NODE_BIN="/c/Program Files/nodejs/node.exe"
+  elif [ -x "/c/Program Files/nodejs/node" ]; then
+    NODE_BIN="/c/Program Files/nodejs/node"
+  else
+    echo "node not found; install Node.js >= 22.19 or set NODE_BIN" >&2
+    exit 1
+  fi
+fi
+exec "$NODE_BIN" "$DIR/../src/main.ts" "$@"
