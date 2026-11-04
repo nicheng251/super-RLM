@@ -1,6 +1,6 @@
 # super-RLM Handoff
 
-Status: architecture decision design complete; both local spikes passed; core vertical slice works end-to-end. Baseline committed at `c530a5a`.  
+Status: architecture decision design complete; both local spikes passed; core vertical slice works end-to-end. HEAD `9cc3edf` pushed to origin/main.  
 Last updated: 2026-11-03
 
 ## 1. 项目一句话
@@ -15,20 +15,20 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 
 ## 2. 当前状态
 
-- 仓库有文档、ADR 和两个已通过的本地 spike；核心实现尚未开始。
+- 仓库有文档、ADR、两个已通过的本地 spike，以及可运行的核心垂直切片；`super-rlm` CLI 和 L2 页面尚未开始。
 - 46 个 ADR 已记录：44 accepted，2 superseded。
 - 架构、状态机、Router API、Worker API、审计和 spike 计划已写入 docs。
 - 项目本地运行时已建立：
   - `runtime/pi/`：Pi 1.5.0（npm 包）；Node.js 由用户自备，不进入 runtime。
   - `runtime/prime-agent/`：Prime Agent 0.10.2（项目内副本）。
 - Spike 结果：
-  - `docs/spikes/pi-router.md`：Router 只暴露 6 个控制面工具；伪 `bash` 调用被拒绝。
+  - `docs/spikes/pi-router.md`：Router 现在暴露 11 个控制面工具 + SSE 通知；伪 `bash` 调用被拒绝。
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；16 个 Python 测试通过，`tsc --noEmit` 通过。
-- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch；13 个 `node:test` 测试通过。
+- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE；14 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、heartbeat；8 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
-- 下一阶段是补 Router 工具/SSE 和 `super-rlm` CLI；发行、安装器、打包暂不做。
+- 下一阶段是 `super-rlm` CLI、交互/RPC 模式下的 SSE 唤醒验证、完整 HITL 联调和 L2 页面；发行、安装器、打包暂不做。
 
 当前实现缺口：
 
@@ -61,8 +61,9 @@ Git 状态：
 
 ```text
 branch: main
-baseline: c530a5a
-working tree: clean after the baseline-record commit
+HEAD: 9cc3edf
+origin/main: 9cc3edf
+working tree: clean
 ```
 
 当前仓库：
@@ -306,6 +307,9 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 5. [done] 实现 Router SSE 通知 + `pi.sendMessage`；交互/RPC 模式下的唤醒验证待补。
 6. [done, manual] 跑通 Orchestrator -> Worker -> Prime Agent 的第一个本地任务；CLI/Router 链路待补。
 7. L2 Chat/Tasks/Task Detail 页面后置。
+8. 写 `apps/cli` 的 `super-rlm` 启动器。
+9. 在交互/RPC 模式下验证 SSE 唤醒。
+10. 补完整的 Orchestrator + Worker HITL 联调。
 
 ## 10. 不要做的事
 
