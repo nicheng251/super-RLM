@@ -67,6 +67,8 @@ POST /internal/v1/reports
 
 - Task/Ticket/Assignment state machine and derived Task status.
 - SQLite persistence with WAL and a schema-version row.
+- Single-instance lock file with stale-PID recovery.
+- Startup recovery for assignments left open by a previous Orchestrator process.
 - Global, per-Task, per-Worker, and priority slot accounting.
 - Push dispatch to a registered Worker via `POST /v1/executions`.
 - Report sequencing, idempotency, and state validation.
@@ -77,9 +79,8 @@ POST /internal/v1/reports
 
 ## Deferred
 
-- Directory lock for a single Orchestrator instance.
 - Forward-only migration runner beyond schema version 1.
-- Durable outbox and startup recovery for pending assignments.
+- Durable outbox beyond the open-assignment recovery pass.
 - SSE event streaming and cursor replay.
 - HMAC-signed Worker reports and scoped tokens.
 - Backup/restore and metrics.

@@ -300,6 +300,12 @@ export class Store {
     `).all(workerId) as Row[]).map(assignmentFromRow);
   }
 
+  listActiveAssignments(): AssignmentRecord[] {
+    return (this.db.prepare(`
+      SELECT * FROM assignments WHERE status IN ('pending', 'running')
+    `).all() as Row[]).map(assignmentFromRow);
+  }
+
   countRunningAssignments(): number {
     return Number((this.db.prepare("SELECT COUNT(*) AS n FROM assignments WHERE status = 'running'").get() as Row).n);
   }

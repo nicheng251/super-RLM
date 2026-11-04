@@ -489,6 +489,39 @@ export class Orchestrator {
     return { accepted: true };
   }
 
+  /** Recover assignments left open by a previous Orchestrator process. */
+  recover(): void {
+    for (const assignment of this.store.listActiveAssignments()) {
+      this.store.updateAssignment(assignment.assignment_id, {
+        status: "ended", end_reason: "lost", updated_at: nowIso(),
+      });
+      const ticket = this.store.getTicket(assignment.ticket_id);
+      if (!ticket || isTerminalTicket(ticket.status)) continue;
+      const retryCount = ticket.retry_count + 1;
+      if (retryCount > 3) {
+        this.store.updateTicket(ticket.ticket_id, {
+          status: "failed",
+          error: { code: "worker_lost", message: "Orchestrator restarted with an open assignment", retryable: true },
+          updated_at: nowIso(),
+        });
+      } else {
+        const delay = BACKOFF_MS[Math.min(retryCount - 1, BACKOFF_MS.length - 1)];
+        this.store.updateTicket(ticket.ticket_id, {
+          status: "lost",
+          retry_count: retryCount,
+          not_before: new Date(Date.now() + delay).toISOString(),
+          updated_at: nowIso(),
+        });
+      }
+      this.store.appendEvent({
+        type: "assignment.ended", task_id: ticket.task_id, ticket_id: ticket.ticket_id,
+        assignment_id: assignment.assignment_id, worker_id: assignment.worker_id,
+        data: { reason: "orchestrator_recovery" },
+      });
+      this.refreshTask(ticket.task_id);
+    }
+  }
+
   async schedule(): Promise<void> {
     if (this.scheduling) {
       this.scheduleAgain = true;
