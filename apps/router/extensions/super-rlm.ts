@@ -143,7 +143,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_create",
     label: "Create Task",
-    description: "Create a Task with one or more independent Tickets. The Router decides the split; the Orchestrator does not.",
+    description: "Create a Task with one or more independent Tickets. Returns immediately. After this call, report the IDs and return control; do not call task_wait. The SSE loop will notify you when the Task settles.",
     parameters: Type.Object({
       task_prompt: Type.String({ description: "The original user request." }),
       tickets: Type.Array(Type.Object({
@@ -159,7 +159,11 @@ export default function (pi: ExtensionAPI) {
           tickets: params.tickets.map((t) => ({ ...t, profile: t.profile ?? "default", metadata: {} })),
           metadata: {},
         };
-        return ok(await call("POST", "/v1/tasks", body));
+        const created = await call("POST", "/v1/tasks", body) as Record<string, unknown>;
+        return ok({
+          ...created,
+          router_hint: "Return control now. Do not call task_wait; the SSE loop will notify you when this Task settles.",
+        });
       } catch (e) { return fail(e); }
     },
   });
@@ -194,17 +198,21 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerTool({
     name: "task_wait",
-    label: "Wait for Task",
-    description: "Wait until a Task settles or the timeout expires, then return its current TaskView.",
+    label: "Wait for Task (blocking)",
+    description: "Blocking wait. Use only when the user explicitly asks you to wait for completion; otherwise return after task_create and wait for the SSE notification. Long waits freeze the Router TUI.",
     parameters: Type.Object({
       task_id: Type.String(),
-      timeout_s: Type.Optional(Type.Number({ description: "Timeout in seconds. Omit to use the Orchestrator default." })),
+      timeout_s: Type.Optional(Type.Number({ description: "Timeout in seconds, default 15, maximum 60." })),
     }),
     async execute(_id, params) {
       try {
-        const timeoutMs = Math.min(Math.max((params.timeout_s ?? 120) * 1000, 1000), 600_000);
-        const q = params.timeout_s === undefined ? "" : `?timeout_s=${params.timeout_s}`;
-        return ok(await call("GET", `/v1/tasks/${encodeURIComponent(params.task_id)}/wait${q}`, undefined, timeoutMs + 5_000));
+        const timeoutSeconds = Math.min(Math.max(params.timeout_s ?? 15, 1), 60);
+        return ok(await call(
+          "GET",
+          `/v1/tasks/${encodeURIComponent(params.task_id)}/wait?timeout_s=${timeoutSeconds}`,
+          undefined,
+          timeoutSeconds * 1000 + 5_000,
+        ));
       } catch (e) { return fail(e); }
     },
   });

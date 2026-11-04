@@ -135,6 +135,7 @@ The Router launch uses:
 ```text
 --no-extensions -e apps/router/extensions/super-rlm.ts
 --no-skills --no-context-files --no-prompt-templates --no-themes --no-mcp -nbt
+--append-system-prompt apps/router/prompts/router.md
 PI_CODING_AGENT_DIR=<home>/pi/agent
 PI_CODING_AGENT_SESSION_DIR=<home>/pi/sessions
 ```

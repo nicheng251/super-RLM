@@ -16,6 +16,7 @@ export interface CliConfig {
   piCli: string;
   routerDir: string;
   routerExtension: string;
+  routerPrompt: string;
   primeAgent: string;
   orchestratorMain: string;
   workerDir: string;
@@ -75,6 +76,7 @@ export function loadConfig(options: { cwd?: string; env?: NodeJS.ProcessEnv; pro
     piCli: join(repoRoot, "runtime", "pi", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "bundle", "cli.js"),
     routerDir: join(repoRoot, "apps", "router"),
     routerExtension: join(repoRoot, "apps", "router", "extensions", "super-rlm.ts"),
+    routerPrompt: join(repoRoot, "apps", "router", "prompts", "router.md"),
     primeAgent: join(repoRoot, "runtime", "prime-agent", process.platform === "win32" ? "prime-agent.exe" : "prime-agent"),
     orchestratorMain: join(repoRoot, "apps", "orchestrator", "src", "main.ts"),
     workerDir: join(repoRoot, "apps", "worker"),
@@ -131,6 +133,7 @@ export function buildRouterArgs(config: CliConfig, options: RouterOptions = {}):
   if (config.primeProvider && config.primeModel) {
     args.push("--provider", config.primeProvider, "--model", config.primeModel);
   }
+  if (existsSync(config.routerPrompt)) args.push("--append-system-prompt", config.routerPrompt);
   args.push(...(options.extraArgs ?? []));
   return args;
 }

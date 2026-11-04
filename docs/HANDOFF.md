@@ -44,6 +44,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
 - HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
+- Router 默认异步调度：`task_create` 后立即返回，由 SSE 通知 Task 终态；`task_wait` 只用于用户显式要求等待，默认 15 秒、最大 60 秒，避免阻塞 TUI。
 - backup/restore 已实现；SQLite 当前 schema v2。
 - 真实模型回归是手动脚本，不进入普通 CI，避免产生 API 费用。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；`super-rlm bootstrap` 已覆盖 kernel venv 和 report skill，但 Pi package 仍需首次 npm install。

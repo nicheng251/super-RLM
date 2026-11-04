@@ -22,6 +22,8 @@ test("buildRouterArgs pins the project session and control-plane guard flags", (
   assert.ok(args.includes("-e"));
   assert.ok(args.includes("--no-skills"));
   assert.ok(args.includes("-nbt"));
+  assert.ok(args.includes("--append-system-prompt"));
+  assert.ok(args[args.indexOf("--append-system-prompt") + 1].endsWith("router.md"));
   assert.equal(args[args.indexOf("--session-id") + 1], "super-rlm-router-default");
   assert.equal(args.at(-1), "hello");
 });
