@@ -18,7 +18,7 @@ import type {
 
 type Row = Record<string, unknown>;
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -150,9 +150,39 @@ export class Store {
     this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec("PRAGMA busy_timeout = 5000");
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  private migrate(): void {
     const row = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as Row | undefined;
-    if (!row) {
-      this.db.prepare("INSERT INTO meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
+    const hasTickets = this.db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tickets'",
+    ).get() !== undefined;
+    let version = row ? Number(row.value) : (hasTickets ? 1 : 0);
+    if (!Number.isFinite(version)) version = 0;
+    if (version > SCHEMA_VERSION) {
+      throw new Error(`Database schema v${version} is newer than this build (v${SCHEMA_VERSION})`);
+    }
+    for (let next = version + 1; next <= SCHEMA_VERSION; next += 1) {
+      this.applyMigration(next);
+    }
+    this.db.prepare("INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(String(SCHEMA_VERSION));
+  }
+
+  private applyMigration(version: number): void {
+    if (version === 2) {
+      this.ensureColumn("tickets", "priority_next", "INTEGER NOT NULL DEFAULT 0");
+      this.ensureColumn("tickets", "resume_message", "TEXT");
+      return;
+    }
+    // Version 1 is the base schema above.
+  }
+
+  private ensureColumn(table: string, column: string, definition: string): void {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as Row[];
+    if (!columns.some((row) => row.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
     }
   }
 
