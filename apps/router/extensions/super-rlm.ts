@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { registerPageCommands } from "./pages.ts";
 
 const BASE = process.env.SUPER_RLM_ORCHESTRATOR_URL ?? "http://127.0.0.1:8787";
 const TOKEN = process.env.SUPER_RLM_ROUTER_TOKEN ?? "";
@@ -324,4 +325,6 @@ export default function (pi: ExtensionAPI) {
     eventAbort?.abort();
     eventAbort = null;
   });
+
+  registerPageCommands(pi);
 }

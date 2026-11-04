@@ -27,6 +27,22 @@ ticket_answer, ticket_resume, ticket_retry, ticket_cancel, task_cancel
 No `bash`, file, MCP, codemode, or skill tools are registered. A hallucinated
 built-in tool call returns `Tool <name> not found`.
 
+## L2 pages
+
+```text
+/tasks        Tasks page: list, select, open Task Detail
+/task <id>    Task Detail page
+```
+
+Keys on Tasks: `↑↓` navigate, `Enter` open, `r` refresh, `q`/Esc close.
+
+Keys on Task Detail: `↑↓` ticket, `a` answer a waiting Ticket, `b` resume a
+blocked Ticket, `t` retry a failed/lost Ticket, `x` cancel a Ticket, `c` cancel
+the Task, `r` refresh, `q`/Esc close.
+
+Page state and actions live in `src/page-model.ts`; `extensions/pages.ts` only
+renders with Pi TUI and forwards actions. The same model is intended for L3.
+
 ## Notifications
 
 On `session_start`, the extension subscribes to `GET /v1/events`. It wakes the
