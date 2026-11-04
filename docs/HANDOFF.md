@@ -41,7 +41,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
 - L2 页面只做了类型检查和加载 smoke，尚未在真实 TUI 中逐项验证按键、刷新和动作。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
-- 没有 backup、model sync；SQLite 当前 schema v2。
+- 没有 backup；SQLite 当前 schema v2。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；`super-rlm bootstrap` 已覆盖 kernel venv 和 report skill，但 Pi package 仍需首次 npm install。
 - Baseline 已提交；当前 HEAD 以 `git log` 为准，工作树保持 clean。
 

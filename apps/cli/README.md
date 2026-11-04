@@ -16,6 +16,7 @@ super-rlm tasks           # headless task list
 super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
 super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
+super-rlm models sync     # write project Pi/Prime models.json from config/models.yaml
 super-rlm config          # print resolved paths and tokens
 ```
 
@@ -57,8 +58,19 @@ SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm
 - `apps/worker/skills/super-rlm-report` editable
 
 Use `super-rlm bootstrap --dry-run` to print the commands without running them.
-It does not configure model providers; create `models.json` in the project Pi/Prime
-agent dirs next.
+## Models
+
+`config/models.yaml` is the project model registry. `super-rlm models sync`
+writes the resolved provider config to:
+
+```text
+<home>/pi/agent/models.json
+<home>/prime/agent/models.json
+```
+
+`apiKey: $NAME` resolves from the process environment or
+`<home>/secrets/providers.env`. A missing secret fails the sync. Use
+`config/models.example.yaml` as the template for a real endpoint.
 
 ## Background services
 

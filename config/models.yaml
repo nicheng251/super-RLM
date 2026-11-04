@@ -1,0 +1,19 @@
+# Local development model. Used by the fake-provider spike harness.
+# Replace with config/models.example.yaml for a real provider.
+
+providers:
+  fake:
+    name: Fake local model
+    api: openai-completions
+    baseUrl: http://127.0.0.1:18901/v1
+    apiKey: fake-key
+    authHeader: true
+    models:
+      - id: fake-1
+        name: Fake 1
+        api: openai-completions
+        reasoning: false
+        input: [text]
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+        contextWindow: 128000
+        maxTokens: 8192

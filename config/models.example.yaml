@@ -1,0 +1,22 @@
+# super-RLM model providers.
+#
+# Copy to config/models.yaml and replace the provider with your endpoint.
+# `apiKey: $ENV_NAME` resolves from the process environment or
+# <SUPER_RLM_HOME>/secrets/providers.env. Never commit real keys.
+
+providers:
+  local:
+    name: Local OpenAI-compatible endpoint
+    api: openai-completions
+    baseUrl: http://127.0.0.1:8000/v1
+    apiKey: $LOCAL_API_KEY
+    authHeader: false
+    models:
+      - id: local-model
+        name: Local Model
+        api: openai-completions
+        reasoning: false
+        input: [text]
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+        contextWindow: 128000
+        maxTokens: 8192
