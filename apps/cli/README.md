@@ -17,6 +17,8 @@ super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
 super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
 super-rlm models sync     # write project Pi/Prime models.json from config/models.yaml
+super-rlm backup <dir>    # offline backup of SUPER_RLM_HOME
+super-rlm restore <dir>   # restore an offline backup
 super-rlm config          # print resolved paths and tokens
 ```
 
@@ -71,6 +73,36 @@ writes the resolved provider config to:
 `apiKey: $NAME` resolves from the process environment or
 `<home>/secrets/providers.env`. A missing secret fails the sync. Use
 `config/models.example.yaml` as the template for a real endpoint.
+
+## Backup and restore
+
+Backup and restore are offline. Stop both services first:
+
+```bash
+super-rlm down
+super-rlm backup D:/backups
+super-rlm backup D:/backups --include-secrets
+super-rlm restore D:/backups/super-rlm-backup-2026-11-04T09-30-00-000Z
+```
+
+`backup` refuses to run while the Orchestrator or Worker health endpoint is
+reachable, then copies `SUPER_RLM_HOME` into
+`<destination>/super-rlm-backup-<timestamp>/`.
+
+The copy excludes `secrets/` unless `--include-secrets` is passed. It also
+excludes transient files: `*.pid`, `*.lock`, `*.writer-lock`, `*.sock`,
+`*.log`, `logs/`, `*.recovery.jsonl`, and `*.orphans.jsonl`.
+
+`manifest.json` records `created_at`, `super_rlm_version`, `node_version`,
+`prime_agent_version`, `schema_version`, `included_secrets`, and every file's
+size and SHA-256.
+
+`restore` validates the manifest and all checksums before changing the current
+runtime. It refuses a schema newer than the running build (v2), stages the
+backup in a temporary directory, renames the current home to
+`<home>.pre-restore-<timestamp>`, then moves the staged copy into place. If the
+backup excluded secrets, the current `<home>/secrets` is copied into the
+restored home.
 
 ## Background services
 

@@ -1,5 +1,6 @@
 
 import { loadConfig, type RouterOptions } from "./config.ts";
+import { runBackup, runRestore } from "./commands/backup.ts";
 import { runBootstrap } from "./commands/bootstrap.ts";
 import { runDev } from "./commands/dev.ts";
 import { runDoctor } from "./commands/doctor.ts";
@@ -19,6 +20,10 @@ Usage:
   super-rlm down                 Stop background Orchestrator and Worker
   super-rlm status               Show background service health and PIDs
   super-rlm dev                  Start Orchestrator and Worker in the foreground
+  super-rlm backup <destination-dir> [--include-secrets]
+                                 Offline backup of the project runtime
+  super-rlm restore <backup-dir>
+                                 Restore an offline backup
   super-rlm tasks [--json] [--limit <n>]
   super-rlm doctor [--json]
   super-rlm init                 Create .super-rlm-project.json
@@ -107,6 +112,24 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  if (command === "backup") {
+    const args = rest.slice(1);
+    const includeSecrets = args.includes("--include-secrets");
+    const destination = args.find((arg) => arg !== "--include-secrets" && !arg.startsWith("-"));
+    if (!destination) {
+      console.error("Usage: super-rlm backup <destination-dir> [--include-secrets]");
+      return 1;
+    }
+    return runBackup(loadConfig(), destination, { includeSecrets });
+  }
+  if (command === "restore") {
+    const backupDir = rest.slice(1).find((arg) => !arg.startsWith("-"));
+    if (!backupDir) {
+      console.error("Usage: super-rlm restore <backup-dir>");
+      return 1;
+    }
+    return runRestore(loadConfig(), backupDir);
+  }
   if (command === "dev") return runDev(loadConfig());
   if (command === "config") {
     console.log(JSON.stringify(loadConfig(), null, 2));
