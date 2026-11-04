@@ -29,13 +29,16 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、heartbeat；8 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
 - `apps/cli` 最小实现已完成：`super-rlm router/dev/tasks/doctor/init/config`；4 个 `node:test` 通过；`super-rlm dev` 和 `super-rlm router` 已手动验证。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
-- 下一阶段是交互/RPC 模式下的 SSE 唤醒验证、完整 HITL 联调和 L2 页面；发行、安装器、打包暂不做。
+- 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
+- 发现并修复 resident kernel 环境过期问题：Worker 在每个 workspace 写 `.super-rlm-report.json`，skill 通过 `SUPER_RLM_REPORT_CONFIG` 每次读取当前 assignment 的 report URL/token。
+- 下一阶段是 L2 Chat/Tasks/Task Detail 页面和生产化加固；发行、安装器、打包暂不做。
 
 当前实现缺口：
 
 - Orchestrator 还缺目录锁、forward-only migration runner、outbox/启动恢复、HMAC。
 - Worker 还缺 assignment heartbeat、HMAC report、profile prepare/blocked commands、容器隔离。
-- Router SSE 通知只在端点层验证，尚未在交互/RPC 模式下验证唤醒。
+- 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
+- Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
 - 没有生产级 auth、migration runner、backup、model sync；SQLite 只有 v1 schema。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；需要 bootstrap 脚本。
 - Baseline 已提交（`c530a5a`）；后续文档提交会在此之后产生新的 commit。
@@ -309,8 +312,8 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 6. [done, manual] 跑通 Orchestrator -> Worker -> Prime Agent 的第一个本地任务；CLI/Router 链路待补。
 7. L2 Chat/Tasks/Task Detail 页面后置。
 8. [done] 写 `apps/cli` 的 `super-rlm` 启动器（router/dev/tasks/doctor/init/config）。
-9. 在交互/RPC 模式下验证 SSE 唤醒。
-10. 补完整的 Orchestrator + Worker HITL 联调。
+9. [done] 在 RPC 模式下验证 SSE 唤醒（`spikes/pi_sse_rpc_probe.py`）。
+10. [done] 补完整的 Orchestrator + Worker HITL 联调（waiting -> answer -> resume -> completed）。
 
 ## 10. 不要做的事
 

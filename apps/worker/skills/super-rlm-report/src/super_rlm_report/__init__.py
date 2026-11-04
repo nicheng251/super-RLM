@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -55,6 +57,17 @@ async def run(
 
     url = os.environ.get("SUPER_RLM_REPORT_URL")
     token = os.environ.get("SUPER_RLM_REPORT_TOKEN")
+    config_path = os.environ.get("SUPER_RLM_REPORT_CONFIG")
+    if config_path:
+        # A resident Prime Agent kernel keeps the environment from the first
+        # Assignment. The Worker rewrites this file before every Assignment so
+        # a resumed session posts to the current report endpoint.
+        try:
+            config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+            url = config.get("url") or url
+            token = config.get("token") or token
+        except FileNotFoundError:
+            pass
     if not url:
         raise RuntimeError("SUPER_RLM_REPORT_URL is not set")
     headers = {"content-type": "application/json"}

@@ -38,8 +38,11 @@ POST /v1/executions/{id}/cancel
 POST /internal/assignments/{id}/report # super-rlm-report skill -> Worker
 ```
 
-The report route requires the per-execution bearer token sent to Prime Agent as
-`SUPER_RLM_REPORT_TOKEN`.
+The report route requires the per-execution bearer token. The Worker writes
+`<workspace>/.super-rlm-report.json` before every Assignment and sends its path
+as `SUPER_RLM_REPORT_CONFIG`. The skill reads this file on every call because a
+resident Prime Agent kernel keeps the first Assignment's environment across a
+resume.
 
 ## Execution lifecycle
 

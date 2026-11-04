@@ -82,11 +82,12 @@ async def open_prime_agent(
     session_ref: str | None,
     report_url: str,
     report_token: str,
+    report_config: Path,
     ticket_id: str,
     on_event: EventCallback | None = None,
 ):
     client = PrimeClient(on_event=on_event)
-    env = build_env(config, workspace, ticket_id, session_dir, report_url, report_token)
+    env = build_env(config, workspace, ticket_id, session_dir, report_url, report_token, report_config)
     args = build_args(config, workspace, session_dir, session_ref)
     async with acp.spawn_agent_process(
         client,

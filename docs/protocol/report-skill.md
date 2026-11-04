@@ -49,7 +49,11 @@ await super_rlm_report(
 
 ## Delivery
 
-- The skill reads `SUPER_RLM_REPORT_URL` and `SUPER_RLM_REPORT_TOKEN` from the environment.
+- The skill reads `SUPER_RLM_REPORT_CONFIG` first. The Worker rewrites this
+  per-workspace JSON file before every Assignment with the current report URL
+  and token. A resident Prime Agent kernel keeps the first Assignment's
+  environment across a resume, so environment variables alone are stale.
+- Fallback: `SUPER_RLM_REPORT_URL` and `SUPER_RLM_REPORT_TOKEN`.
 - It posts the report to the Worker's per-assignment endpoint.
 - The Worker validates the shape and state, then forwards it to the Orchestrator.
 - The skill returns the Worker's acknowledgement to the kernel.

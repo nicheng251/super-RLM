@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import secrets
 import uuid
@@ -50,6 +51,7 @@ class ExecutionState:
     session_dir: Path
     report_token: str
     report_url: str
+    report_config: Path
     resume_ref: str | None = None
     resume_message: str | None = None
     seq: int = 0
@@ -115,6 +117,16 @@ class ExecutionManager:
         report_token = secrets.token_urlsafe(24)
         host = "127.0.0.1" if self.config.host in {"0.0.0.0", "::"} else self.config.host
         report_url = f"http://{host}:{self.config.port}/internal/assignments/{request.assignment_id}/report"
+        report_config = workspace / ".super-rlm-report.json"
+        report_config.write_text(
+            json.dumps({
+                "url": report_url,
+                "token": report_token,
+                "assignment_id": request.assignment_id,
+                "ticket_id": request.ticket_id,
+            }),
+            encoding="utf-8",
+        )
         state = ExecutionState(
             execution_id=execution_id,
             ticket_id=request.ticket_id,
@@ -125,6 +137,7 @@ class ExecutionManager:
             session_dir=session_dir,
             report_token=report_token,
             report_url=report_url,
+            report_config=report_config,
             resume_ref=request.resume.session_ref if request.resume else None,
             resume_message=request.resume.message if request.resume else None,
         )
@@ -143,6 +156,7 @@ class ExecutionManager:
                 state.resume_ref,
                 state.report_url,
                 state.report_token,
+                state.report_config,
                 state.ticket_id,
                 on_event=lambda event: self._on_event(state, event),
             ) as (connection, process, _client):

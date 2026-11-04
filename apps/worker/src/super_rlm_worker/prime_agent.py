@@ -25,6 +25,7 @@ def build_env(
     session_dir: Path,
     report_url: str,
     report_token: str,
+    report_config: Path,
 ) -> dict[str, str]:
     env = strip_inherited_agent_env(dict(os.environ))
     env.update({
@@ -40,6 +41,7 @@ def build_env(
         "RLM_HARNESS_STATE_DIR": str(config.home / "prime" / "harness" / ticket_id),
         "SUPER_RLM_REPORT_URL": report_url,
         "SUPER_RLM_REPORT_TOKEN": report_token,
+        "SUPER_RLM_REPORT_CONFIG": str(report_config),
     })
     if config.bash_shell:
         env["PRIME_AGENT_BASH_SHELL"] = config.bash_shell

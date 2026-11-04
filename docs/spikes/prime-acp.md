@@ -167,3 +167,16 @@ Pass, with four integration requirements:
 2. Discover `session_ref` as the durable session file, not the ACP session id.
 3. Resume with the same daemon socket, and fall back to a new session on lease failure.
 4. Install Python-backed skills editable into the project kernel venv before launch.
+
+
+## Resident kernel environment
+
+A resumed Prime Agent session reuses the resident kernel from the first
+Assignment. That kernel keeps the environment it started with, so
+`SUPER_RLM_REPORT_URL` and `SUPER_RLM_REPORT_TOKEN` from a later Assignment do
+not reach `super-rlm-report`.
+
+Fix: the Worker writes `<workspace>/.super-rlm-report.json` before every
+Assignment and sets `SUPER_RLM_REPORT_CONFIG`. The skill reads that file on
+every call. A full Orchestrator -> Worker -> Prime Agent HITL test passed with
+this mechanism: `waiting` -> answer -> `--resume` -> `completed`.

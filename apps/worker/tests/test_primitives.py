@@ -41,11 +41,13 @@ def test_build_env_uses_project_paths(tmp_path):
         session_dir=tmp_path / "sessions" / "tkt_1",
         report_url="http://127.0.0.1:8080/report",
         report_token="secret",
+        report_config=tmp_path / "workspace" / ".super-rlm-report.json",
     )
     assert env["PRIME_AGENT_CODING_AGENT_DIR"] == str(tmp_path / "prime" / "agent")
     assert env["PRIME_AGENT_SESSION_DIR"] == str(tmp_path / "sessions" / "tkt_1")
     assert env["PRIME_AGENT_KERNEL_VENV"] == str(tmp_path / "kernel")
     assert env["SUPER_RLM_REPORT_TOKEN"] == "secret"
+    assert env["SUPER_RLM_REPORT_CONFIG"] == str(tmp_path / "workspace" / ".super-rlm-report.json")
     assert env["PRIME_AGENT_BASH_SHELL"] == "C:/Program Files/Git/bin/bash.exe"
     assert "PI_CODING_AGENT_DIR" not in env
 
