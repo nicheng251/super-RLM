@@ -5,13 +5,18 @@ import { runDoctor } from "./commands/doctor.ts";
 import { runInit } from "./commands/init.ts";
 import { runRouter } from "./commands/router.ts";
 import { runTasks } from "./commands/tasks.ts";
+import { ensureAllServices, serviceState, stopAllServices } from "./services.ts";
 
 function help(): void {
   console.log(`super-rlm 0.1.0
 
 Usage:
-  super-rlm [router] [--new] [--session <id>] [--project-id <id>] [--home <dir>] [pi args...]
-  super-rlm dev                  Start Orchestrator and Worker
+  super-rlm [router] [--new] [--session <id>] [--no-services] [pi args...]
+                                 Ensure Orchestrator/Worker, then launch Router
+  super-rlm up                   Start Orchestrator and Worker in the background
+  super-rlm down                 Stop background Orchestrator and Worker
+  super-rlm status               Show background service health and PIDs
+  super-rlm dev                  Start Orchestrator and Worker in the foreground
   super-rlm tasks [--json] [--limit <n>]
   super-rlm doctor [--json]
   super-rlm init                 Create .super-rlm-project.json
@@ -20,9 +25,10 @@ Usage:
 Node is a host prerequisite (>= 22.19). The project owns Pi and Prime Agent.`);
 }
 
-function parseRouterArgs(args: string[]): RouterOptions & { projectId?: string; home?: string } {
+function parseRouterArgs(args: string[]): RouterOptions & { projectId?: string; home?: string; noServices?: boolean } {
   const extraArgs: string[] = [];
   let newSession = false;
+  let noServices = false;
   let sessionId: string | undefined;
   let projectId: string | undefined;
   let home: string | undefined;
@@ -30,6 +36,8 @@ function parseRouterArgs(args: string[]): RouterOptions & { projectId?: string; 
     const arg = args[index];
     if (arg === "--new") {
       newSession = true;
+    } else if (arg === "--no-services") {
+      noServices = true;
     } else if (arg === "--session" && args[index + 1]) {
       sessionId = args[++index];
     } else if (arg === "--project-id" && args[index + 1]) {
@@ -40,7 +48,13 @@ function parseRouterArgs(args: string[]): RouterOptions & { projectId?: string; 
       extraArgs.push(arg);
     }
   }
-  return { newSession, sessionId, projectId, home, extraArgs };
+  return { newSession, sessionId, projectId, home, noServices, extraArgs };
+}
+
+function serviceUrlForStatus(config: ReturnType<typeof loadConfig>, name: "orchestrator" | "worker"): string {
+  return name === "orchestrator"
+    ? `${config.orchestratorUrl}/health`
+    : `http://127.0.0.1:${config.workerPort}/v1/health`;
 }
 
 async function main(): Promise<number> {
@@ -61,7 +75,28 @@ async function main(): Promise<number> {
   if (command === "router") {
     const parsed = parseRouterArgs(rest);
     const config = loadConfig({ projectId: parsed.projectId, home: parsed.home });
+    if (!parsed.noServices) await ensureAllServices(config);
     return runRouter(config, parsed);
+  }
+
+  if (command === "up") {
+    await ensureAllServices(loadConfig());
+    return 0;
+  }
+  if (command === "down") {
+    await stopAllServices(loadConfig());
+    return 0;
+  }
+  if (command === "status") {
+    const config = loadConfig();
+    const states = await Promise.all([
+      serviceState(config, "orchestrator"),
+      serviceState(config, "worker"),
+    ]);
+    for (const state of states) {
+      console.log(`${state.name.padEnd(13)} ${state.healthy ? "healthy" : "down"} pid=${state.pid ?? "-"} ${serviceUrlForStatus(config, state.name)}`);
+    }
+    return 0;
   }
 
   if (command === "dev") return runDev(loadConfig());

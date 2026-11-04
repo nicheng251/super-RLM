@@ -6,10 +6,12 @@ prerequisite; it is not bundled in `runtime/`.
 ## Commands
 
 ```bash
-super-rlm                 # launch the Router (Pi) with the project profile
-super-rlm --new           # new Router session
-super-rlm --session <id>  # open a specific Router session
-super-rlm dev             # start Orchestrator + Worker
+super-rlm                 # one-command start: ensure services, then launch Router
+super-rlm --no-services   # launch Router only
+super-rlm up              # start Orchestrator + Worker in the background
+super-rlm down            # stop background Orchestrator + Worker
+super-rlm status          # show background service health and PIDs
+super-rlm dev             # start Orchestrator + Worker in the foreground
 super-rlm tasks           # headless task list
 super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
@@ -17,6 +19,12 @@ super-rlm config          # print resolved paths and tokens
 ```
 
 The default Router session id is `super-rlm-router-<project_id>`.
+
+`super-rlm` is the normal one-command entry point. It health-checks the
+Orchestrator and Worker, starts any missing service as a detached background
+process, then launches Pi in the foreground. Services keep running when the
+Router exits, so long Tickets are not interrupted. Use `super-rlm down` to stop
+them.
 
 ## Examples
 
@@ -38,6 +46,20 @@ Set a non-default runtime root explicitly:
 SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm dev
 SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm
 ```
+
+## Background services
+
+`up` writes:
+
+```text
+<home>/orchestrator/orchestrator.pid
+<home>/orchestrator/orchestrator.log
+<home>/worker/worker.pid
+<home>/worker/worker.log
+```
+
+`status` checks `/health` and `/v1/health`; `down` sends SIGTERM and removes the
+PID files.
 
 ## What `dev` starts
 

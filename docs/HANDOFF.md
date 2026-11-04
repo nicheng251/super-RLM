@@ -27,7 +27,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；16 个 Python 测试通过，`tsc --noEmit` 通过。
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE；14 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、heartbeat；8 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
-- `apps/cli` 最小实现已完成：`super-rlm router/dev/tasks/doctor/init/config`；4 个 `node:test` 通过；`super-rlm dev` 和 `super-rlm router` 已手动验证。
+- `apps/cli` 最小实现已完成：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config` 可用；4 个 `node:test` 通过；`up/status/down` 已手动验证。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
 - 发现并修复 resident kernel 环境过期问题：Worker 在每个 workspace 写 `.super-rlm-report.json`，skill 通过 `SUPER_RLM_REPORT_CONFIG` 每次读取当前 assignment 的 report URL/token。
@@ -311,7 +311,7 @@ Caveat：Pi 需要 Node.js；Node 由用户自备，不进入 runtime。
 5. [done] 实现 Router SSE 通知 + `pi.sendMessage`；交互/RPC 模式下的唤醒验证待补。
 6. [done, manual] 跑通 Orchestrator -> Worker -> Prime Agent 的第一个本地任务；CLI/Router 链路待补。
 7. L2 Chat/Tasks/Task Detail 页面后置。
-8. [done] 写 `apps/cli` 的 `super-rlm` 启动器（router/dev/tasks/doctor/init/config）。
+8. [done] 写 `apps/cli` 的 `super-rlm` 启动器；默认一键拉起后台 Orchestrator/Worker 再启动 Router，另有 `up/down/status`。
 9. [done] 在 RPC 模式下验证 SSE 唤醒（`spikes/pi_sse_rpc_probe.py`）。
 10. [done] 补完整的 Orchestrator + Worker HITL 联调（waiting -> answer -> resume -> completed）。
 
