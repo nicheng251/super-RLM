@@ -9,7 +9,7 @@ import logging
 import httpx
 
 from .config import WorkerConfig
-from .executor import ExecutionManager
+from .executor import ExecutionManager, ExecutionState
 
 LOG = logging.getLogger("super_rlm_worker.heartbeat")
 
@@ -64,3 +64,23 @@ async def heartbeat_loop(config: WorkerConfig, manager: ExecutionManager) -> Non
         except Exception as exc:  # noqa: BLE001
             LOG.warning("heartbeat unavailable: %s", exc)
         await asyncio.sleep(config.heartbeat_interval_s)
+
+
+async def assignment_heartbeat_loop(config: WorkerConfig, manager: ExecutionManager) -> None:
+    while True:
+        active = manager.active_executions()
+        if active:
+            async with httpx.AsyncClient(timeout=10) as client:
+                for state in active:
+                    payload = {"execution_id": state.execution_id, "phase": manager.phase(state)}
+                    try:
+                        response = await client.post(
+                            f"{config.orchestrator_url}/internal/v1/assignments/{state.assignment_id}/heartbeat",
+                            headers=_headers(config),
+                            json=payload,
+                        )
+                        if response.status_code >= 400:
+                            LOG.warning("assignment heartbeat failed: %s %s", response.status_code, response.text)
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.warning("assignment heartbeat unavailable: %s", exc)
+        await asyncio.sleep(config.assignment_heartbeat_interval_s)

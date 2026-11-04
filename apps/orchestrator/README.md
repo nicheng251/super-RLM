@@ -28,6 +28,7 @@ bundled by the project.
 | `SUPER_RLM_WORKSPACES` | `<home>/workspaces` | Per-Ticket workspace root. |
 | `SUPER_RLM_ROUTER_TOKEN` | `dev-router-token` | Router bearer token. |
 | `SUPER_RLM_WORKER_TOKEN` | `dev-worker-token` | Worker/report bearer token. |
+| `SUPER_RLM_CALLBACK_KEY` | `dev-callback-key` | HMAC-SHA256 key for Worker reports. |
 | `SUPER_RLM_MAX_CONCURRENT_TICKETS` | `4` | Global running limit. |
 | `SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK` | `2` | Per-Task normal running limit. |
 | `SUPER_RLM_PRIORITY_RESERVED` | `1` | Slots reserved for answer/resume. |
@@ -82,7 +83,7 @@ POST /internal/v1/reports
 - Forward-only migration runner beyond schema version 1.
 - Durable outbox beyond the open-assignment recovery pass.
 - SSE event streaming and cursor replay.
-- HMAC-signed Worker reports and scoped tokens.
+- Scoped tokens and OIDC/mTLS.
 - Backup/restore and metrics.
 
 ## Tests

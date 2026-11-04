@@ -3,6 +3,11 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import secrets
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -50,19 +55,32 @@ def build_worker_report(
 
 
 class ReportForwarder:
-    def __init__(self, orchestrator_url: str, worker_token: str) -> None:
+    def __init__(self, orchestrator_url: str, worker_token: str, callback_key: str = "") -> None:
         self.orchestrator_url = orchestrator_url.rstrip("/")
         self.worker_token = worker_token
+        self.callback_key = callback_key
 
     async def forward(self, report: WorkerReport) -> ReportAck:
+        body = json.dumps(report.model_dump(mode="json"), separators=(",", ":"))
         headers = {"content-type": "application/json"}
         if self.worker_token:
             headers["authorization"] = f"Bearer {self.worker_token}"
+        if self.callback_key:
+            timestamp = str(int(time.time()))
+            nonce = secrets.token_hex(16)
+            signature = hmac.new(
+                self.callback_key.encode("utf-8"),
+                (timestamp + nonce + body).encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            headers["x-superrlm-timestamp"] = timestamp
+            headers["x-superrlm-nonce"] = nonce
+            headers["x-superrlm-signature"] = signature
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
                 f"{self.orchestrator_url}/internal/v1/reports",
                 headers=headers,
-                json=report.model_dump(mode="json"),
+                content=body.encode("utf-8"),
             )
         if response.status_code >= 400:
             raise ReportForwardError(f"Orchestrator rejected report: {response.status_code} {response.text}")

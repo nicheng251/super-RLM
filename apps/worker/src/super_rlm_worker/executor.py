@@ -100,6 +100,17 @@ class ExecutionManager:
         except KeyError as exc:
             raise ExecutionNotFound(assignment_id) from exc
 
+    def active_executions(self) -> list[ExecutionState]:
+        return [state for state in self._by_execution.values() if not state.done.is_set()]
+
+    def phase(self, state: ExecutionState) -> str:
+        if state.terminal_report is not None:
+            if state.terminal_report.state.value == "waiting":
+                return "waiting"
+            if state.terminal_report.state.value == "blocked":
+                return "blocked"
+        return "running"
+
     async def start(self, request: ExecutionRequest) -> ExecutionState:
         existing = self._by_assignment.get(request.assignment_id)
         if existing is not None:

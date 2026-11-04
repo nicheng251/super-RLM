@@ -26,7 +26,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；16 个 Python 测试通过，`tsc --noEmit` 通过。
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复；18 个 `node:test` 测试通过。
-- `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、heartbeat；8 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
+- `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；10 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
 - `apps/cli` 最小实现已完成：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config` 可用；4 个 `node:test` 通过；`up/status/down` 已手动验证。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
@@ -36,11 +36,12 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 当前实现缺口：
 
 - Orchestrator 还缺 forward-only migration runner、完整 outbox、HMAC。
-- Worker 还缺 assignment heartbeat、HMAC report、profile prepare/blocked commands、容器隔离。
+- Worker 还缺 per-Worker control token、profile prepare/blocked commands、容器隔离。
 - 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
+- HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
 - L2 页面只做了类型检查和加载 smoke，尚未在真实 TUI 中逐项验证按键、刷新和动作。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
-- 没有生产级 auth、backup、model sync；SQLite 只有 v1 schema。
+- 没有 backup、model sync、bootstrap 脚本；SQLite 只有 v1 schema。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；需要 bootstrap 脚本。
 - Baseline 已提交；当前 HEAD 以 `git log` 为准，工作树保持 clean。
 

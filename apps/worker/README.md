@@ -52,9 +52,11 @@ resume.
 4. Record the durable `session_ref` from the session file.
 5. The report skill posts `progress` / `waiting` / `blocked` / `completed` /
    `dropped` / `failed` / `cancelled` to the Worker.
-6. The Worker forwards a `WorkerReport` with a monotonic `seq` and idempotency key.
+6. The Worker forwards a `WorkerReport` with a monotonic `seq`, idempotency key,
+   and HMAC-SHA256 signature over `timestamp + nonce + raw body`.
 7. A turn without a terminal report gets one enforcement prompt; still missing
    becomes `failed / missing_report`.
+8. The Worker sends assignment heartbeats with the current phase.
 8. `waiting` / `blocked` close ACP but keep the session file for `--resume`.
 
 ## Configuration
@@ -77,6 +79,8 @@ resume.
 | `SUPER_RLM_REPORT_SKILL` | repo skill dir | `super-rlm-report` skill path. |
 | `SUPER_RLM_WORKER_PROMPT` | repo prompt | Appended Worker system prompt. |
 | `SUPER_RLM_TURN_TIMEOUT_S` | `3600` | Per-ACP-turn timeout. |
+| `SUPER_RLM_CALLBACK_KEY` | `dev-callback-key` | HMAC-SHA256 key for report callbacks. |
+| `SUPER_RLM_ASSIGNMENT_HEARTBEAT_INTERVAL_S` | `10` | Assignment heartbeat interval. |
 
 ## Tests
 
@@ -90,7 +94,6 @@ kernel venv is missing.
 
 ## Deferred
 
-- HMAC-signed reports and per-Worker control tokens.
-- Assignment heartbeat to the Orchestrator.
+- Per-Worker control tokens and scoped bearer tokens.
 - Per-profile `prepare_command` / `blocked_commands`.
 - Hardened container isolation.

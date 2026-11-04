@@ -53,6 +53,8 @@ class WorkerConfig:
     start_timeout_s: float
     turn_timeout_s: float
     report_token_ttl_s: float
+    callback_key: str
+    assignment_heartbeat_interval_s: float
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "WorkerConfig":
@@ -90,6 +92,8 @@ class WorkerConfig:
             start_timeout_s=float(source.get("SUPER_RLM_START_TIMEOUT_S", "30")),
             turn_timeout_s=float(source.get("SUPER_RLM_TURN_TIMEOUT_S", "3600")),
             report_token_ttl_s=float(source.get("SUPER_RLM_REPORT_TOKEN_TTL_S", "7200")),
+            callback_key=source.get("SUPER_RLM_CALLBACK_KEY", "dev-callback-key"),
+            assignment_heartbeat_interval_s=float(source.get("SUPER_RLM_ASSIGNMENT_HEARTBEAT_INTERVAL_S", "10")),
         )
 
     def ensure_dirs(self) -> None:

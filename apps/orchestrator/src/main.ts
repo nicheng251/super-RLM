@@ -36,6 +36,7 @@ async function main(): Promise<void> {
   const server = createOrchestratorServer(orchestrator, {
     routerToken: config.routerToken,
     workerToken: config.workerToken,
+    callbackKey: config.callbackKey,
   });
 
   server.listen(config.port, config.host, () => {

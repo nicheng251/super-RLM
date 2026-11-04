@@ -28,6 +28,7 @@ test("SSE streams task events with cursors", async () => {
   const server = createOrchestratorServer(orchestrator, {
     routerToken: "router-token",
     workerToken: "worker-token",
+    callbackKey: "callback-key",
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");

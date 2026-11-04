@@ -7,6 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { AddressInfo } from "node:net";
 import type { WorkerHeartbeat, WorkerRegistration, WorkerReport } from "../../../packages/protocol/ts/index.ts";
@@ -15,6 +16,7 @@ import { Orchestrator, OrchestratorError } from "./orchestrator.ts";
 export interface ServerOptions {
   routerToken: string;
   workerToken: string;
+  callbackKey: string;
   profiles?: Array<{ name: string; description: string; model: string; thinking: string }>;
   bodyLimitBytes?: number;
 }
@@ -54,7 +56,7 @@ async function route(
 
   if (segments[0] === "internal") {
     if (!authorized(req, options.workerToken)) return sendJson(res, 401, unauthorized());
-    return routeWorker(req, res, url, segments, orchestrator, bodyLimit);
+    return routeWorker(req, res, url, segments, orchestrator, bodyLimit, options.callbackKey);
   }
 
   if (segments[0] === "v1") {
@@ -153,6 +155,7 @@ async function routeWorker(
   segments: string[],
   orchestrator: Orchestrator,
   bodyLimit: number,
+  callbackKey: string,
 ): Promise<void> {
   const method = req.method ?? "GET";
 
@@ -167,7 +170,11 @@ async function routeWorker(
   }
 
   if (method === "POST" && url.pathname === "/internal/v1/reports") {
-    const body = await readJson(req, bodyLimit) as WorkerReport;
+    const raw = await readRaw(req, bodyLimit);
+    if (!verifyHmac(req, raw, callbackKey)) {
+      return sendJson(res, 401, { error: { code: "invalid_signature", message: "invalid HMAC signature" } });
+    }
+    const body = parseJson(raw) as WorkerReport;
     return sendJson(res, 200, await orchestrator.handleReport(body));
   }
 
@@ -217,7 +224,7 @@ function unauthorized() {
   return { error: { code: "invalid_token", message: "invalid or missing bearer token" } };
 }
 
-async function readJson(req: IncomingMessage, limit: number): Promise<unknown> {
+async function readRaw(req: IncomingMessage, limit: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -226,12 +233,36 @@ async function readJson(req: IncomingMessage, limit: number): Promise<unknown> {
     if (size > limit) throw new OrchestratorError("payload_too_large", "request body is too large");
     chunks.push(buffer);
   }
-  if (size === 0) return {};
+  return Buffer.concat(chunks);
+}
+
+function parseJson(raw: Buffer): unknown {
+  if (raw.length === 0) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(raw.toString("utf8"));
   } catch {
     throw new OrchestratorError("invalid_json", "request body is not valid JSON");
   }
+}
+
+async function readJson(req: IncomingMessage, limit: number): Promise<unknown> {
+  return parseJson(await readRaw(req, limit));
+}
+
+function verifyHmac(req: IncomingMessage, raw: Buffer, secret: string): boolean {
+  if (!secret) return true;
+  const timestamp = String(req.headers["x-superrlm-timestamp"] ?? "");
+  const nonce = String(req.headers["x-superrlm-nonce"] ?? "");
+  const signature = String(req.headers["x-superrlm-signature"] ?? "");
+  if (!timestamp || !nonce || !signature) return false;
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds) || Math.abs(Date.now() / 1000 - seconds) > 300) return false;
+  const expected = createHmac("sha256", secret)
+    .update(timestamp + nonce + raw.toString("utf8"))
+    .digest("hex");
+  const actual = Buffer.from(signature, "hex");
+  const wanted = Buffer.from(expected, "hex");
+  return actual.length === wanted.length && timingSafeEqual(actual, wanted);
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {

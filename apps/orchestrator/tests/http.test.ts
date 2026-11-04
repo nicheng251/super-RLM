@@ -1,5 +1,6 @@
 
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { once } from "node:events";
 import test from "node:test";
 
@@ -27,6 +28,7 @@ async function harness() {
   const server = createOrchestratorServer(orchestrator, {
     routerToken: "router-token",
     workerToken: "worker-token",
+    callbackKey: "callback-key",
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -36,6 +38,20 @@ async function harness() {
 
 function jsonHeaders(token: string): Record<string, string> {
   return { "content-type": "application/json", authorization: `Bearer ${token}` };
+}
+
+function signedHeaders(token: string, body: string): Record<string, string> {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const nonce = "nonce-1";
+  const signature = createHmac("sha256", "callback-key")
+    .update(timestamp + nonce + body)
+    .digest("hex");
+  return {
+    ...jsonHeaders(token),
+    "x-superrlm-timestamp": timestamp,
+    "x-superrlm-nonce": nonce,
+    "x-superrlm-signature": signature,
+  };
 }
 
 async function post(base: string, path: string, token: string, body: unknown): Promise<Response> {
@@ -68,7 +84,7 @@ test("HTTP router and worker routes complete a ticket", async () => {
     const ticketId = created.tickets[0].ticket_id;
     const assignment = store.getActiveAssignment(ticketId);
     assert.ok(assignment);
-    const reportResponse = await post(base, "/internal/v1/reports", "worker-token", {
+    const reportBody = JSON.stringify({
       ticket_id: ticketId,
       assignment_id: assignment.assignment_id,
       execution_id: "exe_1",
@@ -79,6 +95,17 @@ test("HTTP router and worker routes complete a ticket", async () => {
       result: "ok",
       artifacts: [],
       timestamp: new Date().toISOString(),
+    });
+    const unsigned = await fetch(`${base}/internal/v1/reports`, {
+      method: "POST",
+      headers: jsonHeaders("worker-token"),
+      body: reportBody,
+    });
+    assert.equal(unsigned.status, 401);
+    const reportResponse = await fetch(`${base}/internal/v1/reports`, {
+      method: "POST",
+      headers: signedHeaders("worker-token", reportBody),
+      body: reportBody,
     });
     assert.equal(reportResponse.status, 200);
     assert.deepEqual(await reportResponse.json(), { accepted: true });
@@ -113,7 +140,7 @@ test("HTTP answer resumes a waiting ticket with a priority assignment", async ()
     const assignment = store.getActiveAssignment(ticketId);
     assert.ok(assignment);
 
-    const waiting = await post(base, "/internal/v1/reports", "worker-token", {
+    const waitingBody = JSON.stringify({
       ticket_id: ticketId,
       assignment_id: assignment.assignment_id,
       execution_id: "exe_1",
@@ -125,6 +152,11 @@ test("HTTP answer resumes a waiting ticket with a priority assignment", async ()
       session_ref: "session-1",
       artifacts: [],
       timestamp: new Date().toISOString(),
+    });
+    const waiting = await fetch(`${base}/internal/v1/reports`, {
+      method: "POST",
+      headers: signedHeaders("worker-token", waitingBody),
+      body: waitingBody,
     });
     assert.deepEqual(await waiting.json(), { accepted: true });
 

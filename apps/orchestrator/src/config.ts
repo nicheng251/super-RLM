@@ -9,6 +9,7 @@ export interface AppConfig {
   workspaceRoot: string;
   routerToken: string;
   workerToken: string;
+  callbackKey: string;
   maxConcurrentTickets: number;
   maxConcurrentTicketsPerTask: number;
   priorityReserved: number;
@@ -24,6 +25,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     workspaceRoot: env.SUPER_RLM_WORKSPACES ?? join(home, "workspaces"),
     routerToken: env.SUPER_RLM_ROUTER_TOKEN ?? "dev-router-token",
     workerToken: env.SUPER_RLM_WORKER_TOKEN ?? "dev-worker-token",
+    callbackKey: env.SUPER_RLM_CALLBACK_KEY ?? "dev-callback-key",
     maxConcurrentTickets: Number(env.SUPER_RLM_MAX_CONCURRENT_TICKETS ?? "4"),
     maxConcurrentTicketsPerTask: Number(env.SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK ?? "2"),
     priorityReserved: Number(env.SUPER_RLM_PRIORITY_RESERVED ?? "1"),
