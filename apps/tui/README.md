@@ -67,5 +67,4 @@ command mode:
 /help
 ```
 
-`Alt+1..5` and, with the sidebar focused, `1..5` also switch views when a
-terminal does not report Ctrl+digit.
+If a terminal does not report Ctrl+digit, use the slash commands; the Chat editor autocompletes them after `/`.

@@ -26,20 +26,7 @@ export interface KeyContext {
   piRunning: boolean;
 }
 
-const VIEW_KEYS = [
-  ["ctrl+1", "chat"],
-  ["ctrl+2", "tasks"],
-  ["ctrl+3", "detail"],
-  ["ctrl+4", "workers"],
-  ["ctrl+5", "events"],
-  ["alt+1", "chat"],
-  ["alt+2", "tasks"],
-  ["alt+3", "detail"],
-  ["alt+4", "workers"],
-  ["alt+5", "events"],
-] as const satisfies readonly (readonly [string, ViewName])[];
-
-const SIDEBAR_VIEW_KEYS: Record<string, ViewName> = {
+const CTRL_DIGIT_VIEWS: Record<string, ViewName> = {
   "1": "chat",
   "2": "tasks",
   "3": "detail",
@@ -47,28 +34,30 @@ const SIDEBAR_VIEW_KEYS: Record<string, ViewName> = {
   "5": "events",
 };
 
+/** Ctrl+digit is encoded differently by Kitty, xterm modifyOtherKeys, and some terminals. */
+function ctrlDigitView(data: string): ViewName | null {
+  const kitty = /^\x1b\[(49|50|51|52|53);5u$/.exec(data);
+  if (kitty) return CTRL_DIGIT_VIEWS[String(Number(kitty[1]) - 48)] ?? null;
+  const digit = /^\x1b\[([1-5]);5u$/.exec(data);
+  if (digit) return CTRL_DIGIT_VIEWS[digit[1]] ?? null;
+  const modifyOther = /^\x1b\[27;5;(49|50|51|52|53)~$/.exec(data);
+  if (modifyOther) return CTRL_DIGIT_VIEWS[String(Number(modifyOther[1]) - 48)] ?? null;
+  return null;
+}
+
 /** Maps one raw terminal chunk to an app action. Unmapped input reaches the focused component. */
 export function mapKey(data: string, context: KeyContext): Action | null {
   if (matchesKey(data, Key.ctrl("c"))) return { kind: "exit" };
-  for (const [key, view] of VIEW_KEYS) {
-    if (matchesKey(data, key)) return { kind: "view", view };
-  }
+  const ctrlDigit = ctrlDigitView(data);
+  if (ctrlDigit) return { kind: "view", view: ctrlDigit };
 
   if (context.focus === "editor") {
-    if (matchesKey(data, Key.tab)) return { kind: "focus", area: "sidebar" };
     if (matchesKey(data, Key.escape) && context.piRunning) return { kind: "abort" };
-    return null;
-  }
-  if (context.focus === "sidebar") {
-    const view = SIDEBAR_VIEW_KEYS[data];
-    if (view) return { kind: "view", view };
-    if (matchesKey(data, "/")) return { kind: "command" };
     return null;
   }
 
   if (matchesKey(data, "/")) return { kind: "command" };
   if (context.view === "tasks" && matchesKey(data, "f")) return { kind: "cycle-filter" };
-  if (matchesKey(data, Key.tab)) return { kind: "focus", area: "sidebar" };
   if (matchesKey(data, Key.escape)) {
     if (context.view === "chat") return null;
     return context.view === "detail" ? { kind: "back" } : { kind: "view", view: "chat" };

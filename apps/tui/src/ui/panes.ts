@@ -37,45 +37,17 @@ export class SidebarPane implements Component {
   cursor = 0;
   private readonly getModel: () => SidebarModel;
   private readonly onActivate: (view: ViewName) => void;
-  private readonly onTab: () => void;
-  private readonly onEscape: () => void;
 
   constructor(
     getModel: () => SidebarModel,
     onActivate: (view: ViewName) => void,
-    onTab: () => void,
-    onEscape: () => void,
   ) {
     this.getModel = getModel;
     this.onActivate = onActivate;
-    this.onTab = onTab;
-    this.onEscape = onEscape;
   }
 
   syncToCurrent(): void {
     this.cursor = Math.max(0, VIEW_ORDER.indexOf(this.getModel().current));
-  }
-
-  handleInput(data: string): void {
-    if (matchesKey(data, Key.tab)) {
-      this.onTab();
-      return;
-    }
-    if (matchesKey(data, Key.escape)) {
-      this.onEscape();
-      return;
-    }
-    if (matchesKey(data, "j") || matchesKey(data, Key.down)) {
-      this.cursor = clamp(this.cursor + 1, VIEW_ORDER.length);
-      return;
-    }
-    if (matchesKey(data, "k") || matchesKey(data, Key.up)) {
-      this.cursor = clamp(this.cursor - 1, VIEW_ORDER.length);
-      return;
-    }
-    if (matchesKey(data, Key.enter)) {
-      this.onActivate(VIEW_ORDER[this.cursor]);
-    }
   }
 
   render(width: number): string[] {
@@ -99,7 +71,7 @@ export class SidebarPane implements Component {
       const label = `${marker} ${VIEW_LABELS[view]}${suffix}`;
       rows.push(selected ? inverse(truncateToWidth(label, safe)) : truncateToWidth(label, safe));
     }
-    rows.push("", gray("Tab: focus"), gray("^1-5: view"), gray("^C: exit"));
+    rows.push("", gray("Ctrl+1-5: view"), gray("^C: exit"));
     return rows.map((row) => truncateToWidth(row, safe));
   }
 

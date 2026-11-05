@@ -11,12 +11,19 @@ test("global keys exit and switch views", () => {
   assert.deepEqual(mapKey("\x1b[53;5u", base), { kind: "view", view: "events" });
 });
 
-test("chat editor keeps plain text but yields focus and abort", () => {
+test("chat editor keeps plain text and has no Tab focus", () => {
   assert.equal(mapKey("j", base), null);
   assert.equal(mapKey("hello", base), null);
-  assert.deepEqual(mapKey("\t", base), { kind: "focus", area: "sidebar" });
+  assert.equal(mapKey("\t", base), null);
   assert.equal(mapKey("\x1b", base), null);
   assert.deepEqual(mapKey("\x1b", { ...base, piRunning: true }), { kind: "abort" });
+});
+
+test("Ctrl+digit works in common terminal encodings", () => {
+  assert.deepEqual(mapKey("\x1b[49;5u", base), { kind: "view", view: "chat" });
+  assert.deepEqual(mapKey("\x1b[50;5u", base), { kind: "view", view: "tasks" });
+  assert.deepEqual(mapKey("\x1b[1;5u", base), { kind: "view", view: "chat" });
+  assert.deepEqual(mapKey("\x1b[27;5;53~", base), { kind: "view", view: "events" });
 });
 
 test("navigation and ticket actions depend on the active view", () => {
@@ -38,13 +45,10 @@ test("navigation and ticket actions depend on the active view", () => {
   assert.deepEqual(mapKey("j", workers), { kind: "scroll", delta: 1 });
 });
 
-test("slash opens command mode and sidebar digits switch views", () => {
+test("slash opens command mode; f filters Tasks", () => {
   const tasks: KeyContext = { view: "tasks", focus: "main", piRunning: false };
   assert.deepEqual(mapKey("/", tasks), { kind: "command" });
   assert.deepEqual(mapKey("f", tasks), { kind: "cycle-filter" });
   assert.equal(mapKey("f", base), null);
   assert.equal(mapKey("f", { view: "detail", focus: "main", piRunning: false }), null);
-  const sidebar: KeyContext = { view: "tasks", focus: "sidebar", piRunning: false };
-  assert.deepEqual(mapKey("4", sidebar), { kind: "view", view: "workers" });
-  assert.deepEqual(mapKey("/", sidebar), { kind: "command" });
 });

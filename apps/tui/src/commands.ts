@@ -13,6 +13,22 @@ export type SlashCommand =
   | { name: "answer" }
   | { name: "unknown"; raw: string };
 
+export const COMMANDS: ReadonlyArray<{ name: string; description: string }> = [
+  { name: "chat", description: "switch to Chat" },
+  { name: "tasks", description: "switch to Tasks" },
+  { name: "detail", description: "open Task Detail (optional task id)" },
+  { name: "workers", description: "switch to Workers" },
+  { name: "events", description: "switch to Events" },
+  { name: "filter", description: "filter Tasks: all | waiting | running | terminal" },
+  { name: "search", description: "search Tasks by id or prompt" },
+  { name: "clear", description: "clear task search and filter" },
+  { name: "refresh", description: "refresh the current view" },
+  { name: "answer", description: "answer the selected waiting Ticket" },
+  { name: "abort", description: "abort the current Pi turn" },
+  { name: "quit", description: "exit the TUI" },
+  { name: "help", description: "show the command list" },
+];
+
 export const COMMAND_HELP = [
   "/chat                 switch to Chat",
   "/tasks                switch to Tasks",

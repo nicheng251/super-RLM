@@ -1,4 +1,5 @@
 import {
+  CombinedAutocompleteProvider,
   Editor,
   HStack,
   ProcessTerminal,
@@ -14,7 +15,7 @@ import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model
 import type { TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
-import { COMMAND_HELP, parseSlashCommand, viewForCommand } from "./commands.ts";
+import { COMMAND_HELP, COMMANDS, parseSlashCommand, viewForCommand } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
 import {
   addEvent,
@@ -43,7 +44,7 @@ import {
 import { bold, cyan, dim, gray, green, red, yellow } from "./ui/theme.ts";
 
 const FOOTER_HELP: Record<ViewName, string> = {
-  chat: "Enter send/steer \u00b7 / commands \u00b7 Esc abort \u00b7 Tab sidebar \u00b7 ^C exit",
+  chat: "Enter send/steer \u00b7 / commands \u00b7 Esc abort \u00b7 ^1-5 views \u00b7 ^C exit",
   tasks: "j/k select \u00b7 Enter detail \u00b7 f filter \u00b7 r refresh \u00b7 Esc chat",
   detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 q back \u00b7 r refresh",
   workers: "j/k scroll \u00b7 r refresh \u00b7 Esc chat",
@@ -106,10 +107,18 @@ export class TuiApp {
     this.sidebar = new SidebarPane(
       () => this.sidebarModel(),
       (view) => this.openView(view),
-      () => this.toggleFocus(),
-      () => this.setFocus(this.state.view === "chat" ? "editor" : "main"),
     );
     this.statusBar = new StatusBar(() => this.statusModel());
+    this.editor.setAutocompleteProvider(new CombinedAutocompleteProvider(
+      COMMANDS.map((command) => ({ name: command.name, description: command.description })),
+      process.cwd(),
+    ));
+    this.editor.onChange = (text) => {
+      if (text.startsWith("/") && !text.includes(" ")) {
+        this.footer.setTransient(`Commands: ${COMMANDS.slice(0, 6).map((command) => `/${command.name}`).join(" ")} ...`);
+        this.tui.requestRender();
+      }
+    };
     this.editor.onSubmit = (text) => { void this.submitChat(text); };
   }
 
@@ -301,21 +310,13 @@ export class TuiApp {
   }
 
   private setFocus(area: FocusArea): void {
-    this.focus = area;
-    if (area === "editor") {
+    this.focus = area === "sidebar" ? "main" : area;
+    if (this.focus === "editor") {
       this.tui.setFocus(this.editor);
-    } else if (area === "sidebar") {
-      this.sidebar.syncToCurrent();
-      this.tui.setFocus(this.sidebar);
     } else {
       this.tui.setFocus(null);
     }
     this.tui.requestRender();
-  }
-
-  private toggleFocus(): void {
-    if (this.focus === "sidebar") this.setFocus(this.state.view === "chat" ? "editor" : "main");
-    else this.setFocus("sidebar");
   }
 
   private rebuildLayout(): void {
