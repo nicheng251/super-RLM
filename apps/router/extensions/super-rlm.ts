@@ -133,7 +133,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "profile_list",
     label: "List Worker Profiles",
-    description: "List the Worker profiles configured on the Orchestrator. Use this before choosing a profile for a Ticket.",
+    description: "List the Worker profiles configured on the Orchestrator. Use capabilities, requires_repo, and read_only to choose a profile for each Ticket before task_create.",
     parameters: Type.Object({}),
     async execute() {
       try { return ok(await call("GET", "/v1/profiles")); } catch (e) { return fail(e); }
@@ -143,21 +143,30 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_create",
     label: "Create Task",
-    description: "Create a Task with one or more independent Tickets. Returns immediately. After this call, report the IDs and return control; do not call task_wait. The SSE loop will notify you when the Task settles.",
+    description: "Create a Task with one or more independent Tickets. Choose each Ticket's profile from profile_list: match its capabilities, and use requires_repo/read_only when they apply; use default when unsure. Returns immediately. After this call, report the IDs and return control; do not call task_wait. The SSE loop will notify you when the Task settles.",
     parameters: Type.Object({
       task_prompt: Type.String({ description: "The original user request." }),
       tickets: Type.Array(Type.Object({
         title: Type.String({ description: "Short ticket title, at most 200 characters." }),
         prompt: Type.String({ description: "Self-contained Worker prompt." }),
-        profile: Type.Optional(Type.String({ description: "Worker profile name; defaults to default." })),
+        profile: Type.Optional(Type.String({ description: "Worker profile name from profile_list; defaults to default." })),
+        profile_reason: Type.Optional(Type.String({ description: "Short reason for choosing this profile." })),
       }), { minItems: 1, description: "Tickets to create." }),
     }),
     async execute(_id, params) {
       try {
         const body = {
           prompt: params.task_prompt,
-          tickets: params.tickets.map((t) => ({ ...t, profile: t.profile ?? "default", metadata: {} })),
-          metadata: { origin_cwd: process.env.SUPER_RLM_ORIGIN_CWD ?? null },
+          tickets: params.tickets.map((t) => ({
+            title: t.title,
+            prompt: t.prompt,
+            profile: t.profile ?? "default",
+            metadata: {},
+          })),
+          metadata: {
+            origin_cwd: process.env.SUPER_RLM_ORIGIN_CWD ?? null,
+            profile_reasons: params.tickets.map((t) => t.profile_reason ?? null),
+          },
         };
         const created = await call("POST", "/v1/tasks", body) as Record<string, unknown>;
         return ok({

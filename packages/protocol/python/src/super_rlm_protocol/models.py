@@ -357,6 +357,10 @@ class ProfileSummary(BaseModel):
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
     thinking: ThinkingLevel
+    capabilities: list[str] = Field(default_factory=list)
+    requires_repo: bool = False
+    read_only: bool = False
+    write_files: bool = True
 
 
 class ExecutionRequest(BaseModel):

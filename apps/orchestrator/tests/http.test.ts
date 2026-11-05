@@ -24,6 +24,7 @@ async function harness() {
     workerLeaseMs: 30_000,
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
+    projectRepo: null,
   }, dispatch);
   const server = createOrchestratorServer(orchestrator, {
     routerToken: "router-token",

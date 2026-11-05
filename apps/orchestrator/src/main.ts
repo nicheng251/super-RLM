@@ -37,6 +37,7 @@ async function main(): Promise<void> {
     workerLeaseMs: config.workerLeaseMs,
     dispatchTimeoutMs: 10_000,
     workspaceRoot: config.workspaceRoot,
+    projectRepo: config.projectRepo,
     profiles,
   });
   orchestrator.recover();

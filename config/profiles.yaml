@@ -13,6 +13,10 @@ profiles:
     timeout_s: 3600
     prepare_command: null
     blocked_commands: []
+    capabilities: [code, script, docs]
+    requires_repo: false
+    read_only: false
+    write_files: true
     workspace:
       agent_cwd: "."
       artifact_root: "."
@@ -43,6 +47,46 @@ profiles:
     # The Worker owns the worktree; the Agent edits files and does not run VCS
     # commands that could rewrite the shared repository.
     blocked_commands: [git, gh]
+    capabilities: [code, git, refactor]
+    requires_repo: true
+    read_only: false
+    write_files: true
+    workspace:
+      agent_cwd: repo
+      artifact_root: "."
+      metadata_command: >-
+        repo="${SUPER_RLM_WORKSPACE:-.}/repo";
+        branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD);
+        commit=$(git -C "$repo" rev-parse HEAD);
+        printf '{"vcs":"git","branch":"%s","commit":"%s"}\n' "$branch" "$commit"
+    delivery:
+      mode: none
+
+  reviewer:
+    description: Read-only review and analysis of a repository worktree
+    provider: deepseek
+    model: deepseek-flash
+    thinking: high
+    timeout_s: 1800
+    # Same isolated worktree as `git`; policy metadata marks the profile
+    # read-only, and the Agent must not edit files or run VCS commands.
+    prepare_command: >-
+      set -e;
+      repo="${SUPER_RLM_PROJECT_REPO:?SUPER_RLM_PROJECT_REPO is not set}";
+      target="${SUPER_RLM_WORKSPACE:?SUPER_RLM_WORKSPACE is not set}/repo";
+      branch="super-rlm/${SUPER_RLM_TICKET_ID}";
+      if [ ! -e "$target/.git" ]; then
+        if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
+          git -C "$repo" worktree add "$target" "$branch";
+        else
+          git -C "$repo" worktree add -b "$branch" "$target" HEAD;
+        fi;
+      fi
+    blocked_commands: [git, gh]
+    capabilities: [review, analysis]
+    requires_repo: true
+    read_only: true
+    write_files: false
     workspace:
       agent_cwd: repo
       artifact_root: "."

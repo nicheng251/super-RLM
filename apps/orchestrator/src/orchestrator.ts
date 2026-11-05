@@ -83,6 +83,7 @@ export interface OrchestratorConfig {
   workerLeaseMs: number;
   dispatchTimeoutMs: number;
   workspaceRoot: string;
+  projectRepo: string | null;
   profiles?: ProfilesConfig;
 }
 
@@ -92,6 +93,7 @@ export const DEFAULT_CONFIG: Omit<OrchestratorConfig, "workspaceRoot"> = {
   priorityReserved: 1,
   workerLeaseMs: 30_000,
   dispatchTimeoutMs: 10_000,
+  projectRepo: null,
 };
 
 const BACKOFF_MS = [2_000, 5_000, 15_000];
@@ -182,8 +184,16 @@ export class Orchestrator {
       }
       if (!ticket.prompt.trim()) throw new OrchestratorError("invalid_ticket_prompt", "prompt is required");
       const profileName = ticket.profile ?? "default";
-      if (this.profiles && !this.profiles.profiles[profileName]) {
+      const profile = this.profiles?.profiles[profileName];
+      if (this.profiles && !profile) {
         throw new OrchestratorError("unknown_profile", `unknown profile: ${profileName}`, { profile: profileName });
+      }
+      if (profile?.requires_repo && !this.config.projectRepo) {
+        throw new OrchestratorError(
+          "profile_requires_repo",
+          `profile ${profileName} requires SUPER_RLM_PROJECT_REPO`,
+          { profile: profileName },
+        );
       }
       const key = `${ticket.title.trim()}::${ticket.prompt.trim()}`;
       if (seen.has(key)) {

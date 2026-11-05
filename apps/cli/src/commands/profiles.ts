@@ -52,6 +52,10 @@ function printProfile(profile: ProfileConfig): void {
   console.log(`timeout_s:             ${profile.timeout_s}`);
   console.log(`prepare_command:       ${profile.prepare_command ?? "-"}`);
   console.log(`blocked_commands:      ${profile.blocked_commands.length > 0 ? profile.blocked_commands.join(", ") : "-"}`);
+  console.log(`capabilities:          ${profile.capabilities.length > 0 ? profile.capabilities.join(", ") : "-"}`);
+  console.log(`requires_repo:         ${profile.requires_repo}`);
+  console.log(`read_only:             ${profile.read_only}`);
+  console.log(`write_files:           ${profile.write_files}`);
   console.log(`workspace.agent_cwd:   ${profile.workspace.agent_cwd}`);
   console.log(`workspace.artifact_root: ${profile.workspace.artifact_root}`);
   console.log(`workspace.metadata_command: ${profile.workspace.metadata_command ?? "-"}`);
@@ -100,6 +104,10 @@ export function runProfiles(config: CliConfig, args: string[], options: Profiles
         `${profile.provider}/${profile.model}`.padEnd(28),
         profile.thinking.padEnd(7),
         profile.description || "-",
+        profile.capabilities.length > 0 ? `[${profile.capabilities.join(",")}]` : "[-]",
+        `repo=${profile.requires_repo}`,
+        `read_only=${profile.read_only}`,
+        `write_files=${profile.write_files}`,
       ].join(" ").trimEnd());
     }
     return 0;

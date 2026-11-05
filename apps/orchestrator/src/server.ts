@@ -30,7 +30,17 @@ const NOT_FOUND = { error: { code: "not_found", message: "route not found" } };
 
 export function createOrchestratorServer(orchestrator: Orchestrator, options: ServerOptions): Server {
   const profiles = options.profiles ?? [
-    { name: "default", description: "General-purpose worker", provider: "default", model: "default", thinking: "medium" },
+    {
+      name: "default",
+      description: "General-purpose worker",
+      provider: "default",
+      model: "default",
+      thinking: "medium",
+      capabilities: [],
+      requires_repo: false,
+      read_only: false,
+      write_files: true,
+    },
   ];
   const bodyLimit = options.bodyLimitBytes ?? 1_000_000;
 
@@ -288,7 +298,7 @@ function sendError(res: ServerResponse, error: unknown): void {
     const status = error.code.endsWith("_not_found") ? 404
       : error.code === "duplicate_ticket" ? 409
       : error.code.startsWith("ticket_not_") ? 409
-      : error.code === "unknown_profile" ? 400
+      : error.code === "unknown_profile" || error.code === "profile_requires_repo" ? 400
       : error.code.startsWith("invalid_") ? 400
       : 500;
     sendJson(res, status, { error: { code: error.code, message: error.message, details: error.details } });

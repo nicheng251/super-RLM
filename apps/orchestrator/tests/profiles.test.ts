@@ -6,8 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { loadConfig } from "../src/config.ts";
 import { Store } from "../src/db.ts";
-import { Orchestrator } from "../src/orchestrator.ts";
+import { Orchestrator, OrchestratorError } from "../src/orchestrator.ts";
 import type { DispatchFn } from "../src/orchestrator.ts";
 import { defaultProfilesPath, loadProfiles, profileExecution, profileSummaries } from "../src/profiles.ts";
 import { createOrchestratorServer, serverAddress } from "../src/server.ts";
@@ -20,9 +21,15 @@ function writeProfiles(yaml: string): string {
   return path;
 }
 
+test("config reads the project repository from the environment", () => {
+  assert.equal(loadConfig({}).projectRepo, null);
+  assert.equal(loadConfig({ SUPER_RLM_PROJECT_REPO: "   " }).projectRepo, null);
+  assert.equal(loadConfig({ SUPER_RLM_PROJECT_REPO: " /tmp/repo " }).projectRepo, "/tmp/repo");
+});
+
 test("loads the repository profiles and resolves execution options", () => {
   const profiles = loadProfiles(defaultProfilesPath());
-  assert.deepEqual(Object.keys(profiles.profiles).sort(), ["default", "git"]);
+  assert.deepEqual(Object.keys(profiles.profiles).sort(), ["default", "git", "reviewer"]);
 
   const defaultExecution = profileExecution(profiles.profiles.default);
   assert.equal(defaultExecution.provider, "deepseek");
@@ -36,6 +43,10 @@ test("loads the repository profiles and resolves execution options", () => {
   assert.equal(defaultExecution.workspace.metadata_command, null);
   assert.equal(defaultExecution.delivery.mode, "artifacts");
   assert.equal(defaultExecution.delivery.collision, "version");
+  assert.deepEqual(profiles.profiles.default.capabilities, ["code", "script", "docs"]);
+  assert.equal(profiles.profiles.default.requires_repo, false);
+  assert.equal(profiles.profiles.default.read_only, false);
+  assert.equal(profiles.profiles.default.write_files, true);
 
   const gitExecution = profileExecution(profiles.profiles.git);
   assert.equal(gitExecution.workspace.agent_cwd, "repo");
@@ -45,15 +56,35 @@ test("loads the repository profiles and resolves execution options", () => {
   assert.match(gitExecution.workspace.metadata_command ?? "", /rev-parse/);
   assert.match(gitExecution.workspace.metadata_command ?? "", /"vcs":"git"/);
   assert.equal(gitExecution.delivery.mode, "none");
+  assert.deepEqual(profiles.profiles.git.capabilities, ["code", "git", "refactor"]);
+  assert.equal(profiles.profiles.git.requires_repo, true);
+  assert.equal(profiles.profiles.git.read_only, false);
+  assert.equal(profiles.profiles.git.write_files, true);
+
+  const reviewer = profiles.profiles.reviewer;
+  assert.equal(reviewer.thinking, "high");
+  assert.equal(reviewer.timeout_s, 1800);
+  assert.deepEqual(reviewer.capabilities, ["review", "analysis"]);
+  assert.equal(reviewer.requires_repo, true);
+  assert.equal(reviewer.read_only, true);
+  assert.equal(reviewer.write_files, false);
+  assert.match(reviewer.prepare_command ?? "", /worktree add/);
+  assert.deepEqual(reviewer.blocked_commands, ["git", "gh"]);
+  assert.equal(reviewer.delivery.mode, "none");
 
   const summaries = profileSummaries(profiles);
-  assert.deepEqual(summaries.map((profile) => profile.name), ["default", "git"]);
+  assert.deepEqual(summaries.map((profile) => profile.name), ["default", "git", "reviewer"]);
   for (const summary of summaries) {
     assert.deepEqual(
       Object.keys(summary).sort(),
-      ["description", "model", "name", "provider", "thinking"],
+      [
+        "capabilities", "description", "model", "name", "provider",
+        "read_only", "requires_repo", "thinking", "write_files",
+      ],
     );
   }
+  assert.deepEqual(summaries[0].capabilities, ["code", "script", "docs"]);
+  assert.equal(summaries[1].requires_repo, true);
 });
 
 test("rejects invalid profile files", () => {
@@ -126,6 +157,31 @@ test("rejects invalid profile files", () => {
   provider: deepseek
   model: deepseek-flash
 `, /profiles must be a mapping/],
+    [`profiles:
+  default:
+    provider: p
+    model: m
+    read_only: true
+    write_files: true
+`, /default cannot be both read_only and write_files/],
+    [`profiles:
+  default:
+    provider: p
+    model: m
+    capabilities: [code, code]
+`, /default\.capabilities\[1\] duplicates code/],
+    [`profiles:
+  default:
+    provider: p
+    model: m
+    requires_repo: "yes"
+`, /default\.requires_repo must be a boolean/],
+    [`profiles:
+  default:
+    provider: p
+    model: m
+    capabilities: code
+`, /default\.capabilities must be an array/],
   ];
   for (const [yaml, pattern] of cases) {
     assert.throws(() => loadProfiles(writeProfiles(yaml)), pattern);
@@ -147,6 +203,7 @@ test("HTTP profiles, unknown profile rejection, and dispatch execution options",
     workerLeaseMs: 30_000,
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
+    projectRepo: "/tmp/super-rlm/repo",
     profiles,
   }, dispatch);
   orchestrator.registerWorker({
@@ -169,8 +226,12 @@ test("HTTP profiles, unknown profile rejection, and dispatch execution options",
     const listed = await fetch(`${base}/v1/profiles`, { headers });
     assert.equal(listed.status, 200);
     const body = await listed.json() as { profiles: Array<Record<string, unknown>> };
-    assert.deepEqual(body.profiles.map((profile) => profile.name), ["default", "git"]);
+    assert.deepEqual(body.profiles.map((profile) => profile.name), ["default", "git", "reviewer"]);
     assert.equal(body.profiles[0].provider, "deepseek");
+    assert.deepEqual(body.profiles[0].capabilities, ["code", "script", "docs"]);
+    assert.equal(body.profiles[1].requires_repo, true);
+    assert.equal(body.profiles[2].read_only, true);
+    assert.equal(body.profiles[2].write_files, false);
     assert.equal("prepare_command" in body.profiles[1], false);
     assert.equal("blocked_commands" in body.profiles[1], false);
 
@@ -232,6 +293,7 @@ test("an Orchestrator without profiles keeps the legacy env fallback", async () 
     workerLeaseMs: 30_000,
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
+    projectRepo: null,
   }, dispatch);
   orchestrator.registerWorker({
     worker_id: "wrk_legacy",
@@ -250,5 +312,59 @@ test("an Orchestrator without profiles keeps the legacy env fallback", async () 
     assert.equal(orchestrator.getTask(created.task_id).status, "running");
   } finally {
     store.close();
+  }
+});
+
+test("requires_repo profiles need a configured project repository", async () => {
+  const profiles = loadProfiles(defaultProfilesPath());
+  const dispatch: DispatchFn = async (_worker, request) => ({
+    ok: true,
+    executionId: `exe_${request.ticket_id}`,
+  });
+  const build = (projectRepo: string | null, workerId: string) => {
+    const store = new Store(":memory:");
+    const orchestrator = new Orchestrator(store, {
+      maxConcurrentTickets: 4,
+      maxConcurrentTicketsPerTask: 2,
+      priorityReserved: 1,
+      workerLeaseMs: 30_000,
+      dispatchTimeoutMs: 1000,
+      workspaceRoot: "/tmp/super-rlm/workspaces",
+      projectRepo,
+      profiles,
+    }, dispatch);
+    orchestrator.registerWorker({
+      worker_id: workerId,
+      url: "http://fake-worker",
+      max_concurrency: 4,
+      version: "test",
+    });
+    return { store, orchestrator };
+  };
+
+  const missing = build(null, "wrk_no_repo");
+  try {
+    await assert.rejects(
+      missing.orchestrator.createTask({
+        prompt: "review",
+        tickets: [{ title: "review", prompt: "review the change", profile: "reviewer" }],
+      }),
+      (error: unknown) => error instanceof OrchestratorError && error.code === "profile_requires_repo",
+    );
+  } finally {
+    missing.store.close();
+  }
+
+  const present = build("/tmp/super-rlm/repo", "wrk_repo");
+  try {
+    const created = await present.orchestrator.createTask({
+      prompt: "review",
+      tickets: [{ title: "review", prompt: "review the change", profile: "reviewer" }],
+    });
+    const view = present.orchestrator.getTask(created.task_id);
+    assert.equal(view.tickets[0].profile, "reviewer");
+    assert.equal(view.tickets[0].status, "running");
+  } finally {
+    present.store.close();
   }
 });

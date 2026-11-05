@@ -172,6 +172,25 @@ def test_execution_options_defaults_and_profile_summary():
         "thinking": "medium",
     })
     assert summary.description == ""
+    assert summary.capabilities == []
+    assert summary.requires_repo is False
+    assert summary.read_only is False
+    assert summary.write_files is True
+
+    tagged = m.ProfileSummary.model_validate({
+        "name": "reviewer",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "thinking": "high",
+        "capabilities": ["review", "analysis"],
+        "requires_repo": True,
+        "read_only": True,
+        "write_files": False,
+    })
+    assert tagged.capabilities == ["review", "analysis"]
+    assert tagged.requires_repo is True
+    assert tagged.read_only is True
+    assert tagged.write_files is False
 
 
 def test_execution_options_reject_bad_values():

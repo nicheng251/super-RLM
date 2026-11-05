@@ -53,6 +53,10 @@ export interface ProfileConfig {
   timeout_s: number;
   prepare_command: string | null;
   blocked_commands: string[];
+  capabilities: string[];
+  requires_repo: boolean;
+  read_only: boolean;
+  write_files: boolean;
   workspace: WorkspaceProfileConfig;
   delivery: DeliveryProfileConfig;
 }
@@ -102,6 +106,24 @@ export function safeRelativePath(value: unknown, what: string): string {
   return path;
 }
 
+function booleanValue(value: unknown, what: string, fallback: boolean): boolean {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value !== "boolean") fail(`${what} must be a boolean`);
+  return value;
+}
+
+function capabilityNames(value: unknown, what: string): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) fail(`${what} must be an array`);
+  const seen = new Set<string>();
+  return value.map((item, index) => {
+    const capability = requiredText(item, `${what}[${index}]`);
+    if (seen.has(capability)) fail(`${what}[${index}] duplicates ${capability}`);
+    seen.add(capability);
+    return capability;
+  });
+}
+
 function commandNames(value: unknown, what: string): string[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) fail(`${what} must be an array`);
@@ -147,6 +169,9 @@ function parseProfile(name: string, raw: Record<string, unknown>): ProfileConfig
   const workspaceSubdir = deliveryRaw.workspace_subdir === undefined || deliveryRaw.workspace_subdir === null
     ? null
     : safeRelativePath(deliveryRaw.workspace_subdir, `${name}.delivery.workspace_subdir`);
+  const readOnly = booleanValue(raw.read_only, `${name}.read_only`, false);
+  const writeFiles = booleanValue(raw.write_files, `${name}.write_files`, true);
+  if (readOnly && writeFiles) fail(`${name} cannot be both read_only and write_files`);
 
   return {
     name,
@@ -157,6 +182,10 @@ function parseProfile(name: string, raw: Record<string, unknown>): ProfileConfig
     timeout_s: timeout,
     prepare_command: optionalText(raw.prepare_command, `${name}.prepare_command`),
     blocked_commands: commandNames(raw.blocked_commands, `${name}.blocked_commands`),
+    capabilities: capabilityNames(raw.capabilities, `${name}.capabilities`),
+    requires_repo: booleanValue(raw.requires_repo, `${name}.requires_repo`, false),
+    read_only: readOnly,
+    write_files: writeFiles,
     workspace: {
       agent_cwd: safeRelativePath(workspaceRaw.agent_cwd ?? ".", `${name}.workspace.agent_cwd`),
       artifact_root: safeRelativePath(workspaceRaw.artifact_root ?? ".", `${name}.workspace.artifact_root`),
@@ -215,6 +244,10 @@ export function profileSummary(profile: ProfileConfig): ProfileSummary {
     provider: profile.provider,
     model: profile.model,
     thinking: profile.thinking,
+    capabilities: [...profile.capabilities],
+    requires_repo: profile.requires_repo,
+    read_only: profile.read_only,
+    write_files: profile.write_files,
   };
 }
 

@@ -18,6 +18,10 @@ function profilesFile(): string {
     model: deepseek-flash
     thinking: medium
     timeout_s: 3600
+    capabilities: [code, script, docs]
+    requires_repo: false
+    read_only: false
+    write_files: true
     workspace:
       agent_cwd: "."
       artifact_root: "."
@@ -31,6 +35,10 @@ function profilesFile(): string {
     thinking: high
     timeout_s: 7200
     blocked_commands: [git]
+    capabilities: [code, git]
+    requires_repo: true
+    read_only: false
+    write_files: true
     workspace:
       agent_cwd: repo
       artifact_root: "."
@@ -74,9 +82,21 @@ test("profiles validate and list read the file directly", () => {
 
   const json = capture(() => runProfiles(config("unused"), ["list", "--json", "--config", path]));
   assert.equal(json.code, 0);
-  const parsed = JSON.parse(json.stdout.join("\n")) as Array<{ name: string; provider: string }>;
+  const parsed = JSON.parse(json.stdout.join("\n")) as Array<{
+    name: string;
+    provider: string;
+    capabilities: string[];
+    requires_repo: boolean;
+    read_only: boolean;
+    write_files: boolean;
+  }>;
   assert.deepEqual(parsed.map((profile) => profile.name), ["default", "git"]);
   assert.equal(parsed[0].provider, "deepseek");
+  assert.deepEqual(parsed[0].capabilities, ["code", "script", "docs"]);
+  assert.equal(parsed[0].requires_repo, false);
+  assert.equal(parsed[1].requires_repo, true);
+  assert.equal(parsed[1].read_only, false);
+  assert.equal(parsed[1].write_files, true);
 });
 
 test("profiles show prints one profile and rejects an unknown name", () => {
@@ -88,6 +108,10 @@ test("profiles show prints one profile and rejects an unknown name", () => {
   assert.match(output, /workspace\.agent_cwd:\s+repo/);
   assert.match(output, /delivery\.mode:\s+none/);
   assert.match(output, /blocked_commands:\s+git/);
+  assert.match(output, /capabilities:\s+code, git/);
+  assert.match(output, /requires_repo:\s+true/);
+  assert.match(output, /read_only:\s+false/);
+  assert.match(output, /write_files:\s+true/);
 
   const json = capture(() => runProfiles(config("unused"), ["show", "git", "--json", "--config", path]));
   const profile = JSON.parse(json.stdout.join("\n")) as { name: string; workspace: { agent_cwd: string } };

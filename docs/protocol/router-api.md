@@ -41,14 +41,22 @@ Response:
       "description": "General-purpose worker",
       "provider": "deepseek",
       "model": "deepseek-flash",
-      "thinking": "medium"
+      "thinking": "medium",
+      "capabilities": ["code", "script", "docs"],
+      "requires_repo": false,
+      "read_only": false,
+      "write_files": true
     },
     {
       "name": "git",
       "description": "Ticket running in a dedicated git worktree",
       "provider": "deepseek",
       "model": "deepseek-flash",
-      "thinking": "medium"
+      "thinking": "medium",
+      "capabilities": ["code", "git", "refactor"],
+      "requires_repo": true,
+      "read_only": false,
+      "write_files": true
     }
   ]
 }

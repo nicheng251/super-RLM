@@ -534,6 +534,28 @@
           ],
           "title": "Thinking",
           "type": "string"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "requires_repo": {
+          "default": false,
+          "title": "Requires Repo",
+          "type": "boolean"
+        },
+        "read_only": {
+          "default": false,
+          "title": "Read Only",
+          "type": "boolean"
+        },
+        "write_files": {
+          "default": true,
+          "title": "Write Files",
+          "type": "boolean"
         }
       },
       "required": [

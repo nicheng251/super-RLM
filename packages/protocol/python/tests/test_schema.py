@@ -126,7 +126,20 @@ def test_schema_exposes_execution_options_and_profiles():
     delivery = SCHEMA["$defs"]["DeliveryOptions"]["properties"]
     assert {"mode", "collision", "strip_prefix", "workspace_subdir"} <= set(delivery)
     summary = SCHEMA["$defs"]["ProfileSummary"]["properties"]
-    assert {"name", "description", "provider", "model", "thinking"} <= set(summary)
+    assert {
+        "name", "description", "provider", "model", "thinking",
+        "capabilities", "requires_repo", "read_only", "write_files",
+    } <= set(summary)
+    validator("ProfileSummary").validate({
+        "name": "reviewer",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "thinking": "high",
+        "capabilities": ["review"],
+        "requires_repo": True,
+        "read_only": True,
+        "write_files": False,
+    })
 
     payload = {
         "ticket_id": "tkt_1",

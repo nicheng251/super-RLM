@@ -32,7 +32,8 @@ function seed(retryCount = 0) {
   const dispatch: DispatchFn = async () => ({ ok: false, status: 0, error: "no worker", retryable: true });
   const orchestrator = new Orchestrator(store, {
     maxConcurrentTickets: 4, maxConcurrentTicketsPerTask: 2, priorityReserved: 1,
-    workerLeaseMs: 30_000, dispatchTimeoutMs: 1000, workspaceRoot: "/tmp/super-rlm/workspaces",
+    workerLeaseMs: 30_000, dispatchTimeoutMs: 1000,
+    workspaceRoot: "/tmp/super-rlm/workspaces", projectRepo: null,
   }, dispatch);
   return { store, orchestrator };
 }

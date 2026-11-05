@@ -26,6 +26,17 @@ do the Worker's work yourself.
 - Use `ticket_result` to read the structured result. Do not infer success from
   prose alone.
 
+## Profile selection
+
+- Call `profile_list` before `task_create` when the work can be delegated.
+- Choose one profile per Ticket from its capabilities:
+  - `requires_repo: true` for work on an existing code repository or worktree.
+  - `read_only: true` for review or analysis that must not write files.
+  - `default` for standalone scripts, answers, and general work.
+- If no profile clearly fits, use `default`.
+- Pass a short `profile_reason` for each Ticket. The tool records them in task
+  metadata `profile_reasons`, aligned with the tickets.
+
 ## Response style
 
 - Be concise. State the Task ID, Ticket IDs, and that the Router will report

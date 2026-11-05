@@ -21,6 +21,7 @@ function harness() {
     workerLeaseMs: 30_000,
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
+    projectRepo: null,
   }, dispatch);
   orchestrator.registerWorker({
     worker_id: "wrk_test",

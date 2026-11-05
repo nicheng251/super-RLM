@@ -313,6 +313,10 @@ export interface ProfileSummary {
   provider: string;
   model: string;
   thinking: ThinkingLevel;
+  capabilities: string[];
+  requires_repo: boolean;
+  read_only: boolean;
+  write_files: boolean;
 }
 
 export interface ExecutionRequest {

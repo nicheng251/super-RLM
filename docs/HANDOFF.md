@@ -1,6 +1,6 @@
 # super-RLM Handoff
 
-Status: core vertical slice, CLI, L2 TUI, profiles, generic workspaces, per-profile delivery, backup/restore, artifact copy-out, and real-model regression all work. HEAD 以 `git log` 为准。
+Status: core vertical slice, CLI, L2 TUI, capability-routed profiles, generic workspaces, per-profile delivery, backup/restore, artifact copy-out, and real-model regression all work. HEAD 以 `git log` 为准。
 Last updated: 2026-11-05
 
 ## 1. 项目一句话
@@ -25,10 +25,10 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
   - `docs/spikes/pi-router.md`：Router 现在暴露 11 个控制面工具 + SSE 通知；伪 `bash` 调用被拒绝。
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；24 个 Python 测试通过，`tsc --noEmit` 通过。
-- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v4）；32 个 `node:test` 测试通过。
+- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v4）；34 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；47 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands 和 delivery 测试）。
 - `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles` 可用；27 个 `node:test` 通过；`up/status/down` 已手动验证。
-- 当前单元/集成测试合计 132 个：protocol 24、orchestrator 32、worker 47、cli 27、router 2。
+- 当前单元/集成测试合计 134 个：protocol 24、orchestrator 34、worker 47、cli 27、router 2。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
 - 已用真实 DeepSeek `deepseek-flash` 跑通：写文件任务成功（`hello.txt` 内容正确），以及 TUI 中 `/tasks` -> Task Detail -> 回答 -> resume -> succeeded。
@@ -37,6 +37,8 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - 已实现 workspace preparation：`SUPER_RLM_PREPARE_COMMAND` + `SUPER_RLM_PROJECT_REPO`，Worker 在启动 Prime Agent 前执行一次，支持 git worktree、超时、失败报告 `.super-rlm-prepared` 幂等标记。
 - 已实现结果交付：CLI 捕获 `SUPER_RLM_ORIGIN_CWD`，Router 写入 Task metadata，Worker 在 `completed` 后按 `SUPER_RLM_DELIVERY_MODE` 复制 artifacts 到用户启动目录；支持 `version/overwrite/error` 冲突策略和 `strip_prefix`。
 - 已实现 per-profile：`config/profiles.yaml`、`ExecutionOptions`、`/v1/profiles`、未知 profile 拒绝、`super-rlm profiles list/show/validate`。
+- profile 现在带 `capabilities/requires_repo/read_only/write_files`；Router prompt 要求先 `profile_list`，按能力为每个 Ticket 选 profile，并把 `profile_reasons` 写入 Task metadata。
+- 新增 `reviewer` profile（read-only 策略、git worktree、delivery none）；`requires_repo` profile 在 `SUPER_RLM_PROJECT_REPO` 缺失时由 Orchestrator 拒绝。
 - 已实现通用 workspace：`agent_cwd`、`artifact_root`、`metadata_command`、`workspace_metadata`；Orchestrator 不再调用 git，git 只是 profile 元数据。
 - 已实现 profile delivery：每个 profile 可独立设置 `delivery.mode/collision/strip_prefix/workspace_subdir`。
 - 已用真实 DeepSeek 验证 default（artifact delivery）和 git（worktree + blocked git + metadata + delivery none）两个 profile（`docs/spikes/profiles-e2e.md`）。
@@ -49,7 +51,8 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 当前实现缺口：
 
 - Orchestrator 还缺完整 outbox 和用户 callback 的 HMAC。
-- Worker 已有 per-profile prepare/blocked/model/thinking/agent_cwd/metadata/delivery；还缺 per-Worker control token、容器隔离。
+- Worker 已有 per-profile prepare/blocked/model/thinking/agent_cwd/metadata/delivery；`read_only` 目前是策略元数据，尚未做文件系统写保护。
+- 还缺 per-Worker control token、容器隔离。
 - 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
 - HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。

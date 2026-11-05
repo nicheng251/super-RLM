@@ -87,6 +87,34 @@ node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles show git
 node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles validate
 ```
 
+
+## Router profile selection
+
+Profiles carry capability metadata:
+
+```yaml
+capabilities: [code, git, refactor]
+requires_repo: true
+read_only: false
+write_files: true
+```
+
+The Router prompt tells it to:
+
+1. call `profile_list` before `task_create`;
+2. choose one profile per Ticket:
+   - `requires_repo: true` for existing repository/worktree work;
+   - `read_only: true` for review/analysis;
+   - `default` for standalone scripts, answers, and general work;
+3. use `default` when uncertain;
+4. record a short reason in `task metadata.profile_reasons`.
+
+The Orchestrator rejects a profile with `requires_repo: true` when
+`SUPER_RLM_PROJECT_REPO` is missing.
+
+`read_only` is currently policy metadata used for selection, not a hard
+filesystem sandbox. Do not treat it as a security boundary.
+
 ## 3. Create a Ticket with the git profile
 
 Ask the Router for a `git` profile Ticket, or create it through the API/CLI with:
