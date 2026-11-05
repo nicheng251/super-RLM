@@ -28,16 +28,17 @@ export interface SelectorModel {
 }
 
 /**
- * Full-width overlay for choosing a model and thinking level for the Router
- * and for each Worker profile. Left/right changes thinking; up/down moves.
+ * Full-screen two-stage picker: choose a Profile, then choose its model.
+ * Left/right changes thinking on the model page; Esc goes back one level.
  */
 export class ModelSelector implements Component, Focusable {
   readonly profiles: SelectorProfile[];
   readonly models: SelectorModel[];
+  stage: "profiles" | "model" = "profiles";
   selectedProfile = 0;
   selectedModel = 0;
-  pane: "profiles" | "models" = "profiles";
   error: string | null = null;
+  notice: string | null = null;
   onChange: (() => void) | null = null;
   onApply: ((profile: SelectorProfile) => void) | null = null;
   onClose: (() => void) | null = null;
@@ -46,7 +47,6 @@ export class ModelSelector implements Component, Focusable {
   constructor(profiles: SelectorProfile[], models: SelectorModel[]) {
     this.profiles = profiles;
     this.models = models;
-    this.syncModelToProfile();
   }
 
   get focused(): boolean {
@@ -59,27 +59,42 @@ export class ModelSelector implements Component, Focusable {
 
   handleInput(data: string): void {
     if (matchesKey(data, Key.escape)) {
-      this.onClose?.();
+      this.error = null;
+      this.notice = null;
+      if (this.stage === "model") {
+        this.stage = "profiles";
+        this.changed();
+      } else {
+        this.onClose?.();
+      }
       return;
     }
-    if (matchesKey(data, Key.tab)) {
-      this.pane = this.pane === "profiles" ? "models" : "profiles";
+
+    if (this.stage === "profiles") {
+      if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+        const delta = matchesKey(data, Key.up) ? -1 : 1;
+        this.selectedProfile = wrapIndex(this.selectedProfile + delta, this.profiles.length);
+        this.changed();
+        return;
+      }
+      if (matchesKey(data, Key.enter)) {
+        this.stage = "model";
+        this.syncModelToProfile();
+        this.error = null;
+        this.notice = null;
+        this.changed();
+      }
+      return;
+    }
+
+    if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+      const delta = matchesKey(data, Key.up) ? -1 : 1;
+      this.selectedModel = wrapIndex(this.selectedModel + delta, this.models.length);
       this.changed();
       return;
     }
     if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) {
       this.adjustThinking(matchesKey(data, Key.left) ? -1 : 1);
-      this.changed();
-      return;
-    }
-    if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
-      const delta = matchesKey(data, Key.up) ? -1 : 1;
-      if (this.pane === "profiles") {
-        this.selectedProfile = wrapIndex(this.selectedProfile + delta, this.profiles.length);
-        this.syncModelToProfile();
-      } else {
-        this.selectedModel = wrapIndex(this.selectedModel + delta, this.models.length);
-      }
       this.changed();
       return;
     }
@@ -91,6 +106,19 @@ export class ModelSelector implements Component, Focusable {
 
   setError(message: string | null): void {
     this.error = message;
+    this.notice = null;
+    this.changed();
+  }
+
+  setNotice(message: string | null): void {
+    this.notice = message;
+    this.error = null;
+    this.changed();
+  }
+
+  updateProfile(key: string, patch: Partial<SelectorProfile>): void {
+    const profile = this.profiles.find((entry) => entry.key === key);
+    if (profile) Object.assign(profile, patch);
     this.changed();
   }
 
@@ -112,15 +140,14 @@ export class ModelSelector implements Component, Focusable {
     const profile = this.profiles[this.selectedProfile];
     if (!profile) return;
     const index = THINKING_LEVELS.indexOf(profile.thinking);
-    const next = THINKING_LEVELS[(index + delta + THINKING_LEVELS.length) % THINKING_LEVELS.length];
-    profile.thinking = next;
+    profile.thinking = THINKING_LEVELS[(index + delta + THINKING_LEVELS.length) % THINKING_LEVELS.length];
   }
 
   private syncModelToProfile(): void {
     const profile = this.profiles[this.selectedProfile];
     if (!profile) return;
     const index = this.models.findIndex((model) => model.provider === profile.provider && model.id === profile.model);
-    if (index >= 0) this.selectedModel = index;
+    this.selectedModel = index >= 0 ? index : 0;
   }
 
   private changed(): void {
@@ -129,66 +156,65 @@ export class ModelSelector implements Component, Focusable {
 
   render(width: number): string[] {
     const safe = Math.max(24, width);
-    const draft = this.currentProfile();
+    const lines = this.stage === "profiles" ? this.renderProfiles(safe) : this.renderModel(safe);
+    return lines.map((line) => truncateToWidth(line, safe));
+  }
+
+  private renderProfiles(width: number): string[] {
     const lines: string[] = [
       bold("Model & Profiles"),
-      dim("Tab switch panes · ↑↓ select · ←→ thinking · Enter apply · Esc close"),
+      dim("↑↓ select · Enter model selection · Esc close"),
       "",
     ];
-
-    const leftWidth = Math.min(22, Math.max(14, Math.floor(safe / 4)));
-    const rightWidth = Math.max(10, safe - leftWidth - 3);
-    const modelStart = visibleStart(this.selectedModel, this.models.length, 10);
-    const modelRows = this.models.slice(modelStart, modelStart + 10);
-    const rows = Math.max(this.profiles.length, modelRows.length);
-
-    const leftHeader = "Profiles";
-    const rightHeader = "Models";
-    lines.push(`${dim(leftHeader.padEnd(leftWidth))}   ${dim(rightHeader)}`);
-
-    for (let row = 0; row < rows; row += 1) {
-      const profileRow = this.profiles[row];
-      const modelRow = modelRows[row];
-      let left = "";
-      if (profileRow) {
-        const marker = row === this.selectedProfile ? cyan("▸") : " ";
-        const label = `${marker} ${profileRow.label}`;
-        left = row === this.selectedProfile && this.pane === "profiles" ? inverse(truncateToWidth(label, leftWidth)) : truncateToWidth(label, leftWidth);
-      }
-      let right = "";
-      if (modelRow) {
-        const index = modelStart + row;
-        const marker = index === this.selectedModel ? cyan("▸") : " ";
-        const context = modelRow.contextWindow ? ` ctx:${formatTokens(modelRow.contextWindow)}` : "";
-        const label = `${marker} ${modelRow.provider}/${modelRow.id}${context}`;
-        right = index === this.selectedModel && this.pane === "models" ? inverse(truncateToWidth(label, rightWidth)) : truncateToWidth(label, rightWidth);
-      }
-      lines.push(`${pad(left, leftWidth)}   ${right}`);
+    for (let index = 0; index < this.profiles.length; index += 1) {
+      const profile = this.profiles[index];
+      const marker = index === this.selectedProfile ? cyan("▸") : " ";
+      const label = `${marker} ${profile.label}`;
+      const detail = `${profile.provider}/${profile.model}  thinking:${profile.thinking}  ctx:${profile.contextWindow ? formatTokens(profile.contextWindow) : "?"}`;
+      const row = `${label.padEnd(20)}  ${detail}`;
+      lines.push(index === this.selectedProfile ? inverse(truncateToWidth(row, width)) : truncateToWidth(row, width));
     }
+    if (this.profiles.length === 0) lines.push(dim("No profiles available."));
+    if (this.notice) lines.push("", green(this.notice));
+    if (this.error) lines.push("", red(this.error));
+    return lines;
+  }
 
-    if (modelStart > 0 || modelStart + 10 < this.models.length) {
-      lines.push(dim(`models ${modelStart + 1}-${Math.min(modelStart + 10, this.models.length)} of ${this.models.length}`));
+  private renderModel(width: number): string[] {
+    const profile = this.profiles[this.selectedProfile];
+    const draft = this.currentProfile();
+    const lines: string[] = [
+      bold(`Model · ${profile?.label ?? "Profile"}`),
+      dim("↑↓ model · ←→ thinking · Enter apply · Esc back"),
+      "",
+    ];
+    const start = visibleStart(this.selectedModel, this.models.length, 16);
+    const visible = this.models.slice(start, start + 16);
+    for (let row = 0; row < visible.length; row += 1) {
+      const model = visible[row];
+      const index = start + row;
+      const marker = index === this.selectedModel ? cyan("▸") : " ";
+      const current = profile && model.provider === profile.provider && model.id === profile.model ? "  *" : "";
+      const context = model.contextWindow ? `  ctx:${formatTokens(model.contextWindow)}` : "";
+      const label = `${marker} ${model.provider}/${model.id}${context}${current}`;
+      lines.push(index === this.selectedModel ? inverse(truncateToWidth(label, width)) : truncateToWidth(label, width));
+    }
+    if (this.models.length === 0) lines.push(dim("No models available."));
+    if (start > 0 || start + 16 < this.models.length) {
+      lines.push(dim(`models ${start + 1}-${Math.min(start + 16, this.models.length)} of ${this.models.length}`));
     }
     lines.push("");
     if (draft) {
       const thinking = `${yellow("←")} ${bold(draft.thinking)} ${yellow("→")}`;
       const context = draft.contextWindow ? formatTokens(draft.contextWindow) : "?";
-      lines.push(`${bold(draft.label)}  ${gray(draft.provider + "/" + draft.model)}  thinking:${thinking}  ctx:${context}`);
+      lines.push(`${gray(draft.provider + "/" + draft.model)}  thinking:${thinking}  ctx:${context}`);
     }
-    if (this.error) lines.push(red(this.error));
-    return lines.map((line) => truncateToWidth(line, safe));
+    if (this.notice) lines.push("", green(this.notice));
+    if (this.error) lines.push("", red(this.error));
+    return lines;
   }
 
   invalidate(): void {}
-}
-
-function pad(text: string, width: number): string {
-  const visible = visibleWidth(text);
-  return visible >= width ? truncateToWidth(text, width) : text + " ".repeat(width - visible);
-}
-
-function visibleWidth(text: string): number {
-  return truncateToWidth(text, 10000).replace(/\x1b\[[0-9;]*m/g, "").length;
 }
 
 function wrapIndex(index: number, count: number): number {

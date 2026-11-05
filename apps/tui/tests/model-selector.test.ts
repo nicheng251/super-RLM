@@ -12,8 +12,9 @@ const models: SelectorModel[] = [
   { provider: "deepseek", id: "deepseek-pro", contextWindow: 2097152, reasoning: true },
 ];
 
-test("left/right adjusts thinking", () => {
+test("left/right adjusts thinking on the model page", () => {
   const selector = new ModelSelector(profiles, models);
+  selector.handleInput("\r");
   selector.handleInput("\x1b[D");
   assert.equal(selector.profiles[0].thinking, "low");
   selector.handleInput("\x1b[C");
@@ -21,26 +22,40 @@ test("left/right adjusts thinking", () => {
   assert.equal(selector.profiles[0].thinking, "high");
 });
 
-test("Tab selects the model pane and Enter applies the selected model", () => {
+test("Enter opens model selection, Up/Down picks a model, Enter applies and stays", () => {
   const selector = new ModelSelector(profiles, models);
   const applied: SelectorProfile[] = [];
   selector.onApply = (profile) => { applied.push(profile); };
-  selector.handleInput("\t");
+  selector.handleInput("\r");
+  assert.equal(selector.stage, "model");
   selector.handleInput("\x1b[B");
   selector.handleInput("\r");
   assert.equal(applied[0]?.model, "deepseek-pro");
   assert.equal(applied[0]?.contextWindow, 2097152);
+  assert.equal(selector.stage, "model");
 });
 
-test("Esc closes and Alt sequences do not switch or apply", () => {
+test("Esc goes back one level, then closes", () => {
+  const selector = new ModelSelector(profiles, models);
+  let closed = false;
+  selector.onClose = () => { closed = true; };
+  selector.handleInput("\r");
+  selector.handleInput("\x1b");
+  assert.equal(selector.stage, "profiles");
+  assert.equal(closed, false);
+  selector.handleInput("\x1b");
+  assert.equal(closed, true);
+});
+
+test("Alt sequences do not switch or apply", () => {
   const selector = new ModelSelector(profiles, models);
   let closed = false;
   let applied = false;
   selector.onClose = () => { closed = true; };
   selector.onApply = () => { applied = true; };
+  selector.handleInput("\r");
   selector.handleInput("\x1b2");
   assert.equal(closed, false);
   assert.equal(applied, false);
-  selector.handleInput("\x1b");
-  assert.equal(closed, true);
+  assert.equal(selector.stage, "model");
 });

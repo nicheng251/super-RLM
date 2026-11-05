@@ -66,18 +66,16 @@ command mode:
 /answer
 /abort
 /model
-/model list
-/model thinking
-/model thinking <level>
-/model <provider/model> [level]
 /quit
 /help
 ```
 
-`/model` opens a full-width Model & Profiles overlay. Tab switches panes,
-Up/Down selects, Left/Right adjusts thinking, Enter applies, and Esc closes.
-The overlay covers the sidebar and disables Alt+1..4 while open. Router changes
-apply to the current session; Worker profile changes persist to
+`/model` opens a full-screen two-stage Model & Profiles page. On the Profile
+page, Up/Down selects and Enter opens model selection; Esc closes. On the model
+page, Up/Down selects a model, Left/Right adjusts thinking, Enter applies and
+stays, and Esc returns to the Profile page. The page hides Chat and the sidebar
+and disables Alt+1..4 while open. Router changes apply to the current session;
+Worker profile changes persist to
 `<SUPER_RLM_HOME>/profiles.overrides.json`.
 
 View switching is `Alt+1..4` only. The Chat editor autocompletes slash commands after `/`.

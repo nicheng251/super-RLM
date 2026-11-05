@@ -16,7 +16,7 @@ import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model
 import type { ProfileSummary, TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
-import { COMMAND_HELP, COMMANDS, THINKING_LEVELS, parseSlashCommand, type SlashCommand, type ThinkingLevel } from "./commands.ts";
+import { COMMAND_HELP, COMMANDS, THINKING_LEVELS, parseSlashCommand, type ThinkingLevel } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
 import {
   addEvent,
@@ -93,6 +93,7 @@ export class TuiApp {
   private taskTimer: ReturnType<typeof setInterval> | null = null;
   private readonly profiles = new Map<string, ProfileSummary>();
   private modelSelectorOpen = false;
+  private modelSelector: ModelSelector | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshing = false;
   private shuttingDown = false;
@@ -293,76 +294,8 @@ export class TuiApp {
         return;
       }
       case "model":
-        await this.runModelCommand(command);
+        await this.openModelSelector();
         return;
-    }
-  }
-
-  private async runModelCommand(command: Extract<SlashCommand, { name: "model" }>): Promise<void> {
-    if (!command.action && !command.model && !command.thinking) {
-      await this.openModelSelector();
-      return;
-    }
-    if (!this.rpc) {
-      this.pushChat({ kind: "error", text: "Router is not ready yet." });
-      return;
-    }
-    if (this.piRunning) {
-      this.flash("Stop the current turn before changing the model.");
-      return;
-    }
-    try {
-      if (command.action === "list") {
-        const models = await this.rpc.getAvailableModels();
-        this.pushChat({ kind: "system", text: "Available Router models:" });
-        for (const model of models) {
-          const id = `${model.provider}/${model.id}`;
-          const current = id === this.routerModelName ? "  *" : "";
-          const context = model.contextWindow ? `  ctx:${formatTokens(model.contextWindow)}` : "";
-          const reasoning = model.reasoning ? "  reasoning" : "";
-          this.pushChat({ kind: "system", text: `  ${id}${context}${reasoning}${current}` });
-        }
-        return;
-      }
-      if (command.action === "thinking") {
-        const levels = await this.rpc.getAvailableThinkingLevels();
-        const current = await this.rpc.getState();
-        this.pushChat({ kind: "system", text: "Available thinking levels:" });
-        for (const level of levels) {
-          this.pushChat({ kind: "system", text: `  ${level}${level === current.thinkingLevel ? "  *" : ""}` });
-        }
-        return;
-      }
-
-      let selected = command.model;
-      if (selected && !selected.includes("/")) {
-        const models = await this.rpc.getAvailableModels();
-        const match = models.find((model) => model.id === selected);
-        if (!match) {
-          this.pushChat({ kind: "error", text: `Unknown Router model: ${selected}` });
-          return;
-        }
-        selected = `${match.provider}/${match.id}`;
-      }
-      if (selected) {
-        const slash = selected.indexOf("/");
-        const provider = selected.slice(0, slash);
-        const modelId = selected.slice(slash + 1);
-        if (slash <= 0 || !modelId) {
-          this.pushChat({ kind: "error", text: `Expected provider/model, got: ${selected}` });
-          return;
-        }
-        await this.rpc.setModel(provider, modelId);
-      }
-      if (command.thinking) await this.rpc.setThinkingLevel(command.thinking);
-      await this.syncRouterModelState();
-      this.pushChat({
-        kind: "system",
-        text: `Router model: ${this.routerModelName}  thinking:${this.routerThinking}  ctx:${this.routerContextWindow ? formatTokens(this.routerContextWindow) : "?"}`,
-      });
-      this.tui.requestRender();
-    } catch (error) {
-      this.pushChat({ kind: "error", text: `Model command failed: ${error instanceof Error ? error.message : String(error)}` });
     }
   }
 
@@ -396,7 +329,7 @@ export class TuiApp {
       ensure(profile.provider, profile.model, info?.contextWindow ?? null);
     }
 
-    const profiles: SelectorProfile[] = [
+    const choices: SelectorProfile[] = [
       {
         key: "router",
         label: "Router",
@@ -417,18 +350,15 @@ export class TuiApp {
       })),
     ];
 
-    const selector = new ModelSelector(profiles, available);
+    const selector = new ModelSelector(choices, available);
     const previous = this.focus;
-    const handle = this.tui.showOverlay(selector, { width: "100%", maxHeight: "90%", margin: 1, anchor: "center" });
+    this.modelSelector = selector;
     this.modelSelectorOpen = true;
+    this.rebuildLayout();
+    this.tui.setFocus(selector);
     this.tui.requestRender();
     selector.onChange = () => this.tui.requestRender();
-    selector.onClose = () => {
-      handle.hide();
-      this.modelSelectorOpen = false;
-      this.setFocus(previous);
-      this.tui.requestRender();
-    };
+    selector.onClose = () => this.closeModelSelector(previous);
     selector.onApply = (choice) => {
       void (async () => {
         if (this.piRunning) {
@@ -440,6 +370,13 @@ export class TuiApp {
             await this.rpc!.setModel(choice.provider, choice.model);
             await this.rpc!.setThinkingLevel(choice.thinking);
             await this.syncRouterModelState();
+            selector.updateProfile("router", {
+              provider: this.routerProvider,
+              model: this.routerModel,
+              thinking: asThinking(this.routerThinking),
+              contextWindow: this.routerContextWindow,
+            });
+            selector.setNotice(`Applied Router: ${this.routerModelName} · thinking:${this.routerThinking}`);
           } else {
             const updated = await this.api.updateProfile(choice.key, {
               provider: choice.provider,
@@ -447,18 +384,29 @@ export class TuiApp {
               thinking: choice.thinking,
             });
             this.profiles.set(updated.name, updated);
+            selector.updateProfile(choice.key, {
+              provider: updated.provider,
+              model: updated.model,
+              thinking: updated.thinking,
+              contextWindow: lookupModelInfo(this.config.modelsConfigPath, updated.provider, updated.model)?.contextWindow ?? null,
+            });
+            selector.setNotice(`Applied ${choice.label}: ${updated.provider}/${updated.model} · thinking:${updated.thinking}`);
             this.refreshViews();
           }
-          handle.hide();
-          this.modelSelectorOpen = false;
-          this.setFocus(previous);
-          this.flash(`${choice.label}: ${choice.provider}/${choice.model} · thinking:${choice.thinking}`);
           this.tui.requestRender();
         } catch (error) {
           selector.setError(messageOf(error));
         }
       })();
     };
+  }
+
+  private closeModelSelector(previous: FocusArea): void {
+    this.modelSelectorOpen = false;
+    this.modelSelector = null;
+    this.rebuildLayout();
+    this.setFocus(previous);
+    this.tui.requestRender();
   }
 
   private async syncRouterModelState(): Promise<void> {
@@ -508,6 +456,11 @@ export class TuiApp {
 
   private rebuildLayout(): void {
     this.mainScroll = null;
+    if (this.modelSelectorOpen && this.modelSelector) {
+      this.tui.setLayoutRoot(new VStack([{ component: this.modelSelector, basis: 0, grow: 1, minSize: 1 }]));
+      this.tui.setFocus(this.modelSelector);
+      return;
+    }
     const chat = this.state.view === "chat";
     const main = chat ? this.buildChatView() : this.buildMainScroll();
     // Content on the left; navigation/sidebar on the right.

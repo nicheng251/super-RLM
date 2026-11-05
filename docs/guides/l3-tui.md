@@ -104,43 +104,50 @@ Slash commands:
 /answer
 /abort
 /model
-/model list
-/model thinking
-/model thinking <off|minimal|low|medium|high|xhigh|max>
-/model <provider/model> [thinking]
 /quit
 /help
 ```
 
-`/model` opens a full-width Model & Profiles overlay that covers the sidebar:
+`/model` opens a full-screen Model & Profiles page. It hides Chat and the
+sidebar while open. Old text forms such as `/model list` and
+`/model thinking <level>` are not supported.
+
+Profile page:
 
 ```text
 Model & Profiles
-Profiles                 Models
-▸ Router                 ▸ deepseek/deepseek-flash  ctx:1M
-  Worker: default          deepseek/...
-  Worker: git
+▸ Router                 deepseek/deepseek-flash  thinking:medium  ctx:1M
+  Worker: default        deepseek/deepseek-flash  thinking:medium  ctx:1M
+  Worker: git            deepseek/deepseek-flash  thinking:high    ctx:1M
+```
+
+```text
+Up/Down   select Profile
+Enter     open that Profile's model selection
+Esc       close and return to Chat
+```
+
+Model page:
+
+```text
+Model · Worker: git
+▸ deepseek/deepseek-flash  ctx:1M  *
+  deepseek/deepseek-pro    ctx:2M
 Thinking: ← medium →   ctx:1M
 ```
 
-Keys:
-
 ```text
-Tab       switch Profiles / Models pane
-Up/Down   select profile or model
+Up/Down   select model
 Left/Right adjust thinking level
-Enter     apply
-Esc       close
+Enter     apply and stay on the model page
+Esc       return to the Profile page
 ```
 
-While the overlay is open, Alt+1..4 view switching is disabled.
+While either page is open, Alt+1..4 view switching is disabled.
 Router changes apply to the current Router session. Worker profile changes are
 saved under `<SUPER_RLM_HOME>/profiles.overrides.json` and apply to subsequent
 Tickets without restarting the Orchestrator. `config/profiles.yaml` remains the
-base configuration.
-
-Direct text commands (`/model list`, `/model thinking <level>`) remain as
-fallbacks. Model changes are rejected while a Router turn is running.
+base configuration. Model changes are rejected while a Router turn is running.
 
 View switching is `Alt+1..4` only. Task Detail is a child page of Tasks.
 
