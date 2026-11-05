@@ -11,18 +11,22 @@ import { RpcClient, type JsonAgentSessionEvent } from "@earendil-works/pi-coding
 
 import { buildRouterArgs, routerEnv, type CliConfig } from "../../cli/src/config.ts";
 import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model.ts";
-import type { TicketSummary } from "../../../packages/protocol/ts/index.ts";
+import type { TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
 import { COMMAND_HELP, parseSlashCommand, viewForCommand } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
 import {
   addEvent,
+  clamp,
   createState,
+  filterTasks,
   formatEventLine,
+  nextTaskFilter,
   setView,
   waitingTaskCount,
   type AppState,
+  type TaskFilter,
   type ViewName,
 } from "./state.ts";
 import { AnswerDialog } from "./ui/answer-dialog.ts";
@@ -40,7 +44,7 @@ import { bold, cyan, dim, gray, green, red, yellow } from "./ui/theme.ts";
 
 const FOOTER_HELP: Record<ViewName, string> = {
   chat: "Enter send/steer \u00b7 / commands \u00b7 Esc abort \u00b7 Tab sidebar \u00b7 ^C exit",
-  tasks: "j/k select \u00b7 Enter detail \u00b7 r refresh \u00b7 Esc chat",
+  tasks: "j/k select \u00b7 Enter detail \u00b7 f filter \u00b7 r refresh \u00b7 Esc chat",
   detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 q back \u00b7 r refresh",
   workers: "j/k scroll \u00b7 r refresh \u00b7 Esc chat",
   events: "j/k scroll \u00b7 r refresh \u00b7 Esc chat",
@@ -166,7 +170,7 @@ export class TuiApp {
         this.setFocus(action.area);
         return;
       case "move":
-        if (this.state.view === "tasks") this.tasksModel.move(action.delta);
+        if (this.state.view === "tasks") this.moveTask(action.delta);
         else if (this.state.view === "detail") this.detailModel?.move(action.delta);
         this.refreshViews();
         return;
@@ -202,6 +206,9 @@ export class TuiApp {
       }
       case "refresh":
         await this.refreshCurrent();
+        return;
+      case "cycle-filter":
+        this.applyTaskFilter(nextTaskFilter(this.state.filter));
         return;
       case "back":
         this.openView("tasks");
@@ -244,6 +251,15 @@ export class TuiApp {
         if (command.taskId) this.openDetail(command.taskId);
         else this.openView("detail");
         return;
+      case "filter":
+        this.applyTaskFilter(command.filter ?? nextTaskFilter(this.state.filter));
+        return;
+      case "search":
+        this.applyTaskQuery(command.query);
+        return;
+      case "clear":
+        this.clearTaskFilter();
+        return;
       case "refresh":
         await this.refreshCurrent();
         return;
@@ -265,7 +281,6 @@ export class TuiApp {
   private openView(view: ViewName): void {
     setView(this.state, view);
     this.sidebar.syncToCurrent();
-    this.footer.text = FOOTER_HELP[view];
     this.rebuildLayout();
     this.setFocus(view === "chat" ? "editor" : "main");
     this.refreshViews();
@@ -315,7 +330,7 @@ export class TuiApp {
       { component: body, basis: 0, grow: 1, minSize: 3 },
       { component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: 2 },
     ]));
-    this.footer.text = FOOTER_HELP[this.state.view];
+    this.updateFooter();
   }
 
   private buildChatView(): VStack {
@@ -379,8 +394,69 @@ export class TuiApp {
 
   private async loadTasks(): Promise<void> {
     await this.tasksModel.load(30);
+    this.syncTaskSelection();
     this.renderTasks();
     if (this.tasksModel.state.error) this.flash(`Tasks: ${this.tasksModel.state.error}`);
+    this.tui.requestRender();
+  }
+
+  private visibleTasks(): TaskListItem[] {
+    return filterTasks(this.tasksModel.state.tasks, this.state.filter, this.state.query);
+  }
+
+  /** Keeps the original-task selection on a visible row after loads and filter changes. */
+  private syncTaskSelection(): void {
+    const tasks = this.tasksModel.state.tasks;
+    const visible = this.visibleTasks();
+    if (visible.length === 0) {
+      this.tasksModel.state.selected = 0;
+      return;
+    }
+    const selected = tasks[this.tasksModel.state.selected];
+    if (selected && visible.some((task) => task.task_id === selected.task_id)) return;
+    this.tasksModel.state.selected = Math.max(
+      0,
+      tasks.findIndex((task) => task.task_id === visible[0].task_id),
+    );
+  }
+
+  private moveTask(delta: number): void {
+    const tasks = this.tasksModel.state.tasks;
+    const visible = this.visibleTasks();
+    if (visible.length === 0) return;
+    const currentId = tasks[this.tasksModel.state.selected]?.task_id;
+    const current = visible.findIndex((task) => task.task_id === currentId);
+    const next = clamp((current >= 0 ? current : 0) + delta, visible.length);
+    this.tasksModel.state.selected = tasks.findIndex(
+      (task) => task.task_id === visible[next].task_id,
+    );
+  }
+
+  private applyTaskFilter(filter: TaskFilter): void {
+    this.state.filter = filter;
+    this.afterTaskFilterChange(`filter: ${filter}`);
+  }
+
+  private applyTaskQuery(query: string): void {
+    this.state.query = query.trim();
+    this.afterTaskFilterChange(this.state.query ? `search: ${this.state.query}` : "search cleared");
+  }
+
+  private clearTaskFilter(): void {
+    this.state.filter = "all";
+    this.state.query = "";
+    this.afterTaskFilterChange("task filter cleared");
+  }
+
+  private afterTaskFilterChange(message: string): void {
+    this.syncTaskSelection();
+    if (this.state.view === "tasks") {
+      this.renderTasks();
+      this.updateFooter();
+    } else {
+      this.openView("tasks");
+    }
+    this.flash(message);
     this.tui.requestRender();
   }
 
@@ -650,15 +726,25 @@ export class TuiApp {
 
   private renderTasks(): void {
     const model = this.tasksModel;
-    const lines = [bold(`Tasks (${model.state.tasks.length})`), ""];
-    if (model.state.tasks.length === 0) lines.push(dim("No tasks yet."));
-    model.state.tasks.forEach((task, index) => {
-      const marker = index === model.state.selected ? cyan("\u25b8") : " ";
+    const visible = this.visibleTasks();
+    const total = model.state.tasks.length;
+    const selectedId = model.selectedTask()?.task_id;
+    const count = visible.length === total ? `${total}` : `${visible.length}/${total}`;
+    const lines = [bold(`Tasks (${count})`)];
+    const active: string[] = [];
+    if (this.state.filter !== "all") active.push(`filter:${this.state.filter}`);
+    if (this.state.query) active.push(`search:${this.state.query}`);
+    if (active.length > 0) lines.push(gray(active.join("  ")));
+    lines.push("");
+    if (total === 0) lines.push(dim("No tasks yet."));
+    else if (visible.length === 0) lines.push(dim("No tasks match this filter/search."));
+    for (const task of visible) {
+      const marker = task.task_id === selectedId ? cyan("\u25b8") : " ";
       const prompt = oneLine(task.prompt);
       const counts = task.waiting_count > 0 ? yellow(` waiting:${task.waiting_count}`) : "";
       lines.push(`${marker} ${colorStatus(task.status)} ${task.task_id}  ${prompt}${counts}`);
       lines.push(dim(`    tickets ${task.ticket_count} \u00b7 running ${task.running_count} \u00b7 updated ${stamp(task.updated_at)}`));
-    });
+    }
     this.tasksPane.setLines(lines);
   }
 
@@ -723,6 +809,15 @@ export class TuiApp {
   private flash(message: string): void {
     this.footer.setTransient(message);
     this.tui.requestRender();
+  }
+
+  private updateFooter(): void {
+    if (this.state.view !== "tasks") {
+      this.footer.text = FOOTER_HELP[this.state.view];
+      return;
+    }
+    const search = this.state.query ? ` \u00b7 search:${this.state.query}` : "";
+    this.footer.text = `${FOOTER_HELP.tasks} \u00b7 filter:${this.state.filter}${search}`;
   }
 
   private installStderrCapture(): void {

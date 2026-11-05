@@ -84,6 +84,9 @@ Slash commands:
 /detail [task_id]
 /workers
 /events
+/filter [all|waiting|running|terminal]
+/search <text>
+/clear
 /refresh
 /answer
 /abort
@@ -91,10 +94,13 @@ Slash commands:
 /help
 ```
 
+`f` cycles the Tasks filter. `waiting` includes tasks with waiting/blocked
+counts; `running` includes tasks with running tickets; `terminal` includes
+succeeded/partial/failed/cancelled/timed_out.
+
 ## Limitations
 
-- Chat RPC startup is smoke-tested; a full live DeepSeek Chat E2E is still to
-  be added.
+- Live DeepSeek Chat E2E has passed (`docs/spikes/l3-chat-e2e.md`).
 - `read_only` is not enforced by the TUI.
 - Workers view depends on `GET /v1/workers`.
 - Mouse support is limited to pi-tui defaults.

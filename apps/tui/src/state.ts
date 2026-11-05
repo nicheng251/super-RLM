@@ -1,4 +1,4 @@
-import type { Event, TaskListItem, WorkerView } from "../../../packages/protocol/ts/index.ts";
+import { isTerminalTaskStatus, type Event, type TaskListItem, type WorkerView } from "../../../packages/protocol/ts/index.ts";
 
 export type { WorkerView };
 
@@ -13,6 +13,15 @@ export const VIEW_LABELS: Record<ViewName, string> = {
   events: "Events",
 };
 
+export type TaskFilter = "all" | "waiting" | "running" | "terminal";
+
+export const TASK_FILTERS: readonly TaskFilter[] = ["all", "waiting", "running", "terminal"];
+
+export function nextTaskFilter(filter: TaskFilter): TaskFilter {
+  const index = TASK_FILTERS.indexOf(filter);
+  return TASK_FILTERS[(index + 1) % TASK_FILTERS.length];
+}
+
 export type PiStatus = "starting" | "idle" | "running" | "error";
 
 export interface ServiceHealth {
@@ -25,6 +34,8 @@ export interface ServiceHealth {
 export interface AppState {
   view: ViewName;
   previousView: ViewName;
+  filter: TaskFilter;
+  query: string;
   workers: WorkerView[];
   events: Event[];
   eventCursor: number;
@@ -36,6 +47,8 @@ export function createState(): AppState {
   return {
     view: "chat",
     previousView: "chat",
+    filter: "all",
+    query: "",
     workers: [],
     events: [],
     eventCursor: 0,
@@ -47,6 +60,28 @@ export function createState(): AppState {
 export function clamp(index: number, count: number): number {
   if (count <= 0) return 0;
   return Math.max(0, Math.min(count - 1, index));
+}
+
+/** Applies the task status bucket and a case-insensitive task id/prompt search. */
+export function filterTasks(
+  tasks: readonly TaskListItem[],
+  filter: TaskFilter,
+  query: string,
+): TaskListItem[] {
+  const needle = query.trim().toLowerCase();
+  return tasks.filter((task) => {
+    if (needle && !`${task.task_id}\n${task.prompt}`.toLowerCase().includes(needle)) return false;
+    switch (filter) {
+      case "all":
+        return true;
+      case "waiting":
+        return task.status === "waiting" || task.waiting_count > 0;
+      case "running":
+        return task.status === "running" || task.running_count > 0;
+      case "terminal":
+        return isTerminalTaskStatus(task.status);
+    }
+  });
 }
 
 export function setView(state: AppState, view: ViewName): void {

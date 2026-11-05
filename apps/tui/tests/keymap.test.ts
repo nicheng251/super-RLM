@@ -41,6 +41,9 @@ test("navigation and ticket actions depend on the active view", () => {
 test("slash opens command mode and sidebar digits switch views", () => {
   const tasks: KeyContext = { view: "tasks", focus: "main", piRunning: false };
   assert.deepEqual(mapKey("/", tasks), { kind: "command" });
+  assert.deepEqual(mapKey("f", tasks), { kind: "cycle-filter" });
+  assert.equal(mapKey("f", base), null);
+  assert.equal(mapKey("f", { view: "detail", focus: "main", piRunning: false }), null);
   const sidebar: KeyContext = { view: "tasks", focus: "sidebar", piRunning: false };
   assert.deepEqual(mapKey("4", sidebar), { kind: "view", view: "workers" });
   assert.deepEqual(mapKey("/", sidebar), { kind: "command" });

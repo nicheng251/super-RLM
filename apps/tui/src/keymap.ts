@@ -14,6 +14,7 @@ export type Action =
   | { kind: "retry" }
   | { kind: "cancel" }
   | { kind: "refresh" }
+  | { kind: "cycle-filter" }
   | { kind: "back" }
   | { kind: "abort" }
   | { kind: "scroll"; delta: number }
@@ -66,6 +67,7 @@ export function mapKey(data: string, context: KeyContext): Action | null {
   }
 
   if (matchesKey(data, "/")) return { kind: "command" };
+  if (context.view === "tasks" && matchesKey(data, "f")) return { kind: "cycle-filter" };
   if (matchesKey(data, Key.tab)) return { kind: "focus", area: "sidebar" };
   if (matchesKey(data, Key.escape)) {
     if (context.view === "chat") return null;

@@ -15,6 +15,16 @@ test("parses detail with an optional task id", () => {
   assert.deepEqual(parseSlashCommand("/task tsk_456"), { name: "detail", taskId: "tsk_456" });
 });
 
+test("parses task filter, search, and clear commands", () => {
+  assert.deepEqual(parseSlashCommand("/filter"), { name: "filter" });
+  assert.deepEqual(parseSlashCommand("/filter waiting"), { name: "filter", filter: "waiting" });
+  assert.deepEqual(parseSlashCommand("/filter TERMINAL"), { name: "filter", filter: "terminal" });
+  assert.deepEqual(parseSlashCommand("/filter nope"), { name: "unknown", raw: "/filter nope" });
+  assert.deepEqual(parseSlashCommand("/search hello world"), { name: "search", query: "hello world" });
+  assert.deepEqual(parseSlashCommand("/search"), { name: "search", query: "" });
+  assert.deepEqual(parseSlashCommand("/clear"), { name: "clear" });
+});
+
 test("parses actions and rejects unknown commands", () => {
   assert.deepEqual(parseSlashCommand("/refresh"), { name: "refresh" });
   assert.deepEqual(parseSlashCommand("/abort"), { name: "abort" });

@@ -22,6 +22,9 @@ super-rlm tui
 - **Chat** - Pi Router session over RPC. Enter sends; while a turn runs, Enter
   steers it. Esc aborts a running turn.
 - **Tasks** - `OrchestratorClient.listTasks`; j/k select, Enter opens the detail.
+  `f` cycles the filter (all, waiting, running, terminal), and `/search <text>`
+  matches task ids or prompts case-insensitively. The footer shows the active
+  filter and search.
 - **Task Detail** - tickets with profile, summary, question, error, workspace,
   branch, commit, and delivery fields. `a` answers a waiting ticket, `t` retries,
   `c` cancels, `q` goes back.
@@ -54,6 +57,9 @@ command mode:
 /detail [task_id]
 /workers
 /events
+/filter [name]
+/search <text>
+/clear
 /refresh
 /answer
 /abort

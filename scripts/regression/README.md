@@ -86,6 +86,59 @@ Flags:
 The Worker's report enforcement prompt still applies: a turn that ends without
 a terminal report gets one enforcement prompt.
 
+## L3 Chat
+
+`l3_chat.py` is a separate manual test for the L3 Chat path. It starts the
+same Orchestrator and Worker, starts Pi in RPC mode with the Router extension,
+sends one real Chat prompt, and verifies that the Router delegates a Ticket
+whose Worker file is delivered to the launch directory.
+
+The harness creates a fresh launch directory at `<log-dir>/origin` and sets
+`SUPER_RLM_ORIGIN_CWD` to it. It accepts `hello.txt` with the exact content
+`hello from l3 chat` and at most one trailing newline.
+
+Cost: one Chat turn (Router model) plus one Worker Ticket (Worker model). Stop
+any `super-rlm up` instance for the same `--home` first; the Orchestrator
+single-instance lock prevents a second instance, even on a different port.
+
+Usage:
+
+```bash
+python scripts/regression/l3_chat.py --help
+
+python scripts/regression/l3_chat.py \
+  --kernel-venv C:/Users/15065/.super-rlm/projects/prj_spike_local/prime/kernel-venv
+
+# Use a disposable home if you do not want to stop the normal services.
+python scripts/regression/l3_chat.py --home <disposable-home> --log-dir <dir>
+```
+
+Flags:
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--home` | `~/.super-rlm/projects/prj_deepseek` | Prepared project home with `secrets/`, `pi/agent/models.json`, `prime/agent/models.json`, and a kernel venv. |
+| `--orchestrator-port` | `18840` | Local Orchestrator port. |
+| `--worker-port` | `18098` | Local Worker port. |
+| `--timeout` | `300` | Deadline in seconds for the delegated Task, after the Chat turn. |
+| `--kernel-venv` | `<home>/prime/kernel-venv` | Prime Agent kernel venv. |
+| `--log-dir` | `<home>/regression/logs/<run_id>` | Child logs and the `origin/` launch directory. |
+
+Assertions:
+
+- The Chat prompt reaches Pi (`prompt_seen`) and the turn settles without an abort.
+- The Router calls `task_create`, does not call `task_wait`, returns assistant
+  text, and raises no extension error.
+- The Task is `succeeded`, the chosen Ticket is `succeeded` with profile
+  `default`, the artifact is reported, and delivery has no error.
+- `hello.txt` exists under the launch directory and contains exactly
+  `hello from l3 chat` (one trailing newline allowed).
+
+The harness appends `apps/router/prompts/router.md` exactly as the L3 TUI's
+`buildRouterArgs` does. It prints one JSON summary on stdout; child logs are
+under `--log-dir`. Exit codes are `0` pass, `1` setup/assertion/timeout failure,
+`130` interrupted.
+
 ## Lifecycle and cleanup
 
 1. Validate Node.js, the Worker venv, Prime Agent, the kernel venv, the model
