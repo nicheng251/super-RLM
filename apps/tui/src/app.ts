@@ -558,7 +558,6 @@ export class TuiApp {
       await client.start();
       this.state.health.pi = "idle";
       this.pushChat({ kind: "system", text: "Pi Router ready." });
-      this.pushChat({ kind: "system", text: "View switching: Alt+1..5 only." });
     } catch (error) {
       this.state.health.pi = "error";
       this.pushChat({ kind: "error", text: `Pi failed to start: ${messageOf(error)}` });
