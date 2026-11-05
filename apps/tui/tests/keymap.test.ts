@@ -8,7 +8,8 @@ const base: KeyContext = { view: "chat", focus: "editor", piRunning: false };
 test("global keys exit and Alt+digit switches views", () => {
   assert.deepEqual(mapKey("\x03", base), { kind: "exit" });
   assert.deepEqual(mapKey("\x1b2", base), { kind: "view", view: "tasks" });
-  assert.deepEqual(mapKey("\x1b5", base), { kind: "view", view: "events" });
+  assert.deepEqual(mapKey("\x1b3", base), { kind: "view", view: "workers" });
+  assert.deepEqual(mapKey("\x1b4", base), { kind: "view", view: "events" });
 });
 
 test("chat editor keeps plain text and has no Tab focus", () => {

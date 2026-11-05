@@ -27,17 +27,15 @@ export interface KeyContext {
 const ALT_VIEW_KEYS = [
   ["alt+1", "chat"],
   ["alt+2", "tasks"],
-  ["alt+3", "detail"],
-  ["alt+4", "workers"],
-  ["alt+5", "events"],
+  ["alt+3", "workers"],
+  ["alt+4", "events"],
 ] as const satisfies readonly (readonly [string, ViewName])[];
 
 const ALT_DIGIT_VIEWS: Record<string, ViewName> = {
   "\x1b1": "chat",
   "\x1b2": "tasks",
-  "\x1b3": "detail",
-  "\x1b4": "workers",
-  "\x1b5": "events",
+  "\x1b3": "workers",
+  "\x1b4": "events",
 };
 
 function altDigitView(data: string): ViewName | null {

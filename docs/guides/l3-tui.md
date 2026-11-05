@@ -70,7 +70,11 @@ on the left; the view sidebar is on the right.
 ## Keys
 
 ```text
-Alt+1..5      switch Chat/Tasks/Detail/Workers/Events
+Alt+1         Chat
+Alt+2         Tasks
+Alt+3         Workers
+Alt+4         Events
+Enter         open the selected Task's Detail subpage
 /             command mode (type /command in Chat)
 Ctrl+C        exit
 Esc           back / abort Chat turn
@@ -84,9 +88,10 @@ q             back to Tasks
 r             refresh
 ```
 
-**Alt+1..5 is the only view-switching shortcut.** Ctrl+digit, F-keys, Tab,
-sidebar digits, and slash commands are not view-switching methods. The Chat
-editor autocompletes non-view slash commands after `/`.
+**Alt+1..4 is the only view-switching shortcut.** Task Detail is not a
+top-level view; open it with Enter from Tasks. Ctrl+digit, F-keys, Tab, sidebar
+digits, and slash commands are not view-switching methods. The Chat editor
+autocompletes non-view slash commands after `/`.
 
 Slash commands:
 
@@ -101,7 +106,7 @@ Slash commands:
 /help
 ```
 
-View switching is `Alt+1..5` only.
+View switching is `Alt+1..4` only. Task Detail is a child page of Tasks.
 
 `f` cycles the Tasks filter. `waiting` includes tasks with waiting/blocked
 counts; `running` includes tasks with running tickets; `terminal` includes

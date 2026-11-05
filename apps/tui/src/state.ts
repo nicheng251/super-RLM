@@ -4,7 +4,7 @@ export type { WorkerView };
 
 export type ViewName = "chat" | "tasks" | "detail" | "workers" | "events";
 
-export const VIEW_ORDER: readonly ViewName[] = ["chat", "tasks", "detail", "workers", "events"];
+export const VIEW_ORDER: readonly ViewName[] = ["chat", "tasks", "workers", "events"];
 export const VIEW_LABELS: Record<ViewName, string> = {
   chat: "Chat",
   tasks: "Tasks",

@@ -65,13 +65,12 @@ export class SidebarPane implements Component {
       const marker = current ? cyan("\u25cf") : " ";
       let suffix = "";
       if (view === "tasks" && model.tasksWaiting > 0) suffix = yellow(` \u25cf ${model.tasksWaiting}`);
-      if (view === "detail" && model.detailWaiting) suffix = yellow(" ?");
       if (view === "workers" && model.workers > 0) suffix = gray(` ${model.workers}`);
       if (view === "events" && model.unreadEvents > 0) suffix = yellow(` \u25cf ${model.unreadEvents}`);
       const label = `${marker} ${VIEW_LABELS[view]}${suffix}`;
       rows.push(selected ? inverse(truncateToWidth(label, safe)) : truncateToWidth(label, safe));
     }
-    rows.push("", gray("Alt+1-5: view"), gray("^C: exit"));
+    rows.push("", gray("Alt+1-4: view"), gray("^C: exit"));
     return rows.map((row) => truncateToWidth(row, safe));
   }
 

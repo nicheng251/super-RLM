@@ -45,7 +45,7 @@ import {
 import { bold, cyan, dim, gray, green, red, yellow } from "./ui/theme.ts";
 
 const FOOTER_HELP: Record<ViewName, string> = {
-  chat: "Enter send/steer \u00b7 / commands \u00b7 Alt+1..5 views \u00b7 ^C exit",
+  chat: "Enter send/steer \u00b7 / commands \u00b7 Alt+1..4 views \u00b7 ^C exit",
   tasks: "j/k select \u00b7 Enter detail \u00b7 f filter \u00b7 r refresh \u00b7 Alt+1 chat",
   detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 r refresh \u00b7 Alt+2 tasks",
   workers: "j/k scroll \u00b7 r refresh \u00b7 Alt+1 chat",
@@ -358,7 +358,7 @@ export class TuiApp {
 
   private sidebarModel(): SidebarModel {
     return {
-      current: this.state.view,
+      current: this.state.view === "detail" ? "tasks" : this.state.view,
       focused: false,
       tasksWaiting: waitingTaskCount(this.tasksModel.state.tasks),
       detailWaiting: this.detailModel?.state.task?.tickets.some((ticket) => ticket.status === "waiting") ?? false,

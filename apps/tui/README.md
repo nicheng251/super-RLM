@@ -30,16 +30,17 @@ right, and the Chat editor spanning the full terminal width at the bottom.
   `f` cycles the filter (all, waiting, running, terminal), and `/search <text>`
   matches task ids or prompts case-insensitively. The footer shows the active
   filter and search.
-- **Task Detail** - tickets with profile, summary, question, error, workspace,
-  branch, commit, and delivery fields. `a` answers a waiting ticket, `t` retries,
-  `c` cancels, `q` goes back.
+- **Task Detail** - opened from Tasks with Enter; tickets with profile, summary,
+  question, error, workspace, branch, commit, and delivery fields. `a` answers a
+  waiting ticket, `s` resumes, `t` retries, `c` cancels.
 - **Workers** - `GET /v1/workers` (defensive; shows an error if the route is
   absent).
 - **Events** - SSE `GET /v1/events?after=<cursor>` with reconnect and backoff.
 
-Alt+1..5 is the only view-switching shortcut. Ctrl+digit, F-keys, Tab, and
-sidebar navigation are not used for view switching. Ctrl+C exits. The Chat
-editor autocompletes non-view slash commands.
+Alt+1..4 is the only view-switching shortcut (Chat, Tasks, Workers, Events).
+Task Detail is a subpage opened with Enter from Tasks, not a sidebar item.
+Ctrl+digit, F-keys, Tab, and sidebar navigation are not used for view switching.
+Ctrl+C exits. The Chat editor autocompletes non-view slash commands.
 
 ## Notes
 
