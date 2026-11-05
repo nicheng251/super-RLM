@@ -103,9 +103,18 @@ Slash commands:
 /refresh
 /answer
 /abort
+/model
+/model list
+/model thinking
+/model thinking <off|minimal|low|medium|high|xhigh|max>
+/model <provider/model> [thinking]
 /quit
 /help
 ```
+
+`/model` changes the current Router session only; it does not edit
+`config/models.yaml`. The status bar updates model, thinking level, and context
+window immediately. Model changes are rejected while a Router turn is running.
 
 View switching is `Alt+1..4` only. Task Detail is a child page of Tasks.
 

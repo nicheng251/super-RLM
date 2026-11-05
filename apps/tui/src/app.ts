@@ -16,7 +16,7 @@ import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model
 import type { ProfileSummary, TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
-import { COMMAND_HELP, COMMANDS, parseSlashCommand } from "./commands.ts";
+import { COMMAND_HELP, COMMANDS, parseSlashCommand, type SlashCommand, type ThinkingLevel } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
 import {
   addEvent,
@@ -96,9 +96,15 @@ export class TuiApp {
   private shuttingDown = false;
   private readonly originalStderrWrite = process.stderr.write.bind(process.stderr);
   private readonly config: CliConfig;
+  private routerModelName: string;
+  private routerThinking: string;
+  private routerContextWindow: number | null;
 
   constructor(config: CliConfig) {
     this.config = config;
+    this.routerModelName = config.primeModelName ?? `${config.primeProvider}/${config.primeModel}`;
+    this.routerThinking = config.primeThinking ?? "default";
+    this.routerContextWindow = config.primeContextWindow;
     this.tui = new TuiAltScreen(new ProcessTerminal());
     this.editor = new Editor(this.tui, EDITOR_THEME, { paddingX: 1 });
     this.api = new TuiApi({
@@ -276,6 +282,84 @@ export class TuiApp {
         else this.flash("No waiting question on the selected ticket.");
         return;
       }
+      case "model":
+        await this.runModelCommand(command);
+        return;
+    }
+  }
+
+  private async runModelCommand(command: Extract<SlashCommand, { name: "model" }>): Promise<void> {
+    if (!this.rpc) {
+      this.pushChat({ kind: "error", text: "Router is not ready yet." });
+      return;
+    }
+    if (this.piRunning) {
+      this.flash("Stop the current turn before changing the model.");
+      return;
+    }
+    try {
+      if (command.action === "list") {
+        const models = await this.rpc.getAvailableModels();
+        this.pushChat({ kind: "system", text: "Available Router models:" });
+        for (const model of models) {
+          const id = `${model.provider}/${model.id}`;
+          const current = id === this.routerModelName ? "  *" : "";
+          const context = model.contextWindow ? `  ctx:${formatTokens(model.contextWindow)}` : "";
+          const reasoning = model.reasoning ? "  reasoning" : "";
+          this.pushChat({ kind: "system", text: `  ${id}${context}${reasoning}${current}` });
+        }
+        return;
+      }
+      if (command.action === "thinking") {
+        const levels = await this.rpc.getAvailableThinkingLevels();
+        const current = await this.rpc.getState();
+        this.pushChat({ kind: "system", text: "Available thinking levels:" });
+        for (const level of levels) {
+          this.pushChat({ kind: "system", text: `  ${level}${level === current.thinkingLevel ? "  *" : ""}` });
+        }
+        return;
+      }
+
+      let selected = command.model;
+      if (selected && !selected.includes("/")) {
+        const models = await this.rpc.getAvailableModels();
+        const match = models.find((model) => model.id === selected);
+        if (!match) {
+          this.pushChat({ kind: "error", text: `Unknown Router model: ${selected}` });
+          return;
+        }
+        selected = `${match.provider}/${match.id}`;
+      }
+      if (selected) {
+        const slash = selected.indexOf("/");
+        const provider = selected.slice(0, slash);
+        const modelId = selected.slice(slash + 1);
+        if (slash <= 0 || !modelId) {
+          this.pushChat({ kind: "error", text: `Expected provider/model, got: ${selected}` });
+          return;
+        }
+        await this.rpc.setModel(provider, modelId);
+      }
+      if (command.thinking) await this.rpc.setThinkingLevel(command.thinking);
+      await this.syncRouterModelState();
+      this.pushChat({
+        kind: "system",
+        text: `Router model: ${this.routerModelName}  thinking:${this.routerThinking}  ctx:${this.routerContextWindow ? formatTokens(this.routerContextWindow) : "?"}`,
+      });
+      this.tui.requestRender();
+    } catch (error) {
+      this.pushChat({ kind: "error", text: `Model command failed: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  }
+
+  private async syncRouterModelState(): Promise<void> {
+    if (!this.rpc) return;
+    const state = await this.rpc.getState();
+    this.routerThinking = state.thinkingLevel;
+    const model = state.model as { provider?: string; id?: string; name?: string; contextWindow?: number } | undefined;
+    if (model) {
+      this.routerModelName = model.name ?? `${model.provider ?? "?"}/${model.id ?? "?"}`;
+      this.routerContextWindow = model.contextWindow ?? null;
     }
   }
 
@@ -371,12 +455,11 @@ export class TuiApp {
   }
 
   private statusModel(): StatusModel {
-    const routerModel = this.config.primeModelName ?? `${this.config.primeProvider}/${this.config.primeModel}`;
     return {
       projectId: this.config.projectId,
-      routerModel,
-      routerThinking: this.config.primeThinking ?? "default",
-      routerContextWindow: this.config.primeContextWindow,
+      routerModel: this.routerModelName,
+      routerThinking: this.routerThinking,
+      routerContextWindow: this.routerContextWindow,
       orchestrator: this.state.health.orchestrator,
       worker: this.state.health.worker,
       sse: this.state.health.sse,
@@ -572,6 +655,7 @@ export class TuiApp {
     try {
       await client.start();
       this.state.health.pi = "idle";
+      try { await this.syncRouterModelState(); } catch { /* keep config values */ }
       this.pushChat({ kind: "system", text: "Pi Router ready." });
     } catch (error) {
       this.state.health.pi = "error";

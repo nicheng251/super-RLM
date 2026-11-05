@@ -26,6 +26,13 @@ test("parses actions and rejects unknown commands", () => {
   assert.deepEqual(parseSlashCommand("/quit"), { name: "quit" });
   assert.deepEqual(parseSlashCommand("/exit"), { name: "quit" });
   assert.deepEqual(parseSlashCommand("/answer"), { name: "answer" });
+  assert.deepEqual(parseSlashCommand("/model"), { name: "model" });
+  assert.deepEqual(parseSlashCommand("/model list"), { name: "model", action: "list" });
+  assert.deepEqual(parseSlashCommand("/model thinking"), { name: "model", action: "thinking" });
+  assert.deepEqual(parseSlashCommand("/model thinking HIGH"), { name: "model", thinking: "high" });
+  assert.deepEqual(parseSlashCommand("/model deepseek/deepseek-flash"), { name: "model", model: "deepseek/deepseek-flash" });
+  assert.deepEqual(parseSlashCommand("/model deepseek/deepseek-flash low"), { name: "model", model: "deepseek/deepseek-flash", thinking: "low" });
+  assert.deepEqual(parseSlashCommand("/model thinking nope"), { name: "unknown", raw: "/model thinking nope" });
   assert.deepEqual(parseSlashCommand("/help"), { name: "help" });
   assert.deepEqual(parseSlashCommand("/nope"), { name: "unknown", raw: "/nope" });
   assert.equal(parseSlashCommand("hello"), null);

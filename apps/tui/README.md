@@ -65,8 +65,13 @@ command mode:
 /refresh
 /answer
 /abort
+/model
+/model list
+/model thinking
+/model thinking <level>
+/model <provider/model> [level]
 /quit
 /help
 ```
 
-If a terminal does not report Ctrl+digit, use the slash commands; the Chat editor autocompletes them after `/`.
+View switching is `Alt+1..4` only. The Chat editor autocompletes slash commands after `/`.
