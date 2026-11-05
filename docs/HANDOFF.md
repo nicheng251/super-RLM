@@ -53,7 +53,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - 已新增 `GET /v1/workers` 和 WorkerView 协议，TUI Workers 页可用。
 - L3 目前是垂直切片：真实 DeepSeek Chat E2E 已通过；后续继续打磨搜索/过滤、overlay、鼠标和快捷键兼容性。
 - 已实现 `super-rlm artifacts <ticket_id>`：从 Ticket workspace 复制 artifacts 或整个 workspace；workspace/branch/commit 已写入 Ticket result 和 TUI Task Detail。
-- 默认 provider/model 从 `config/models.yaml` 的 `default` 读取，环境变量仍优先；`models sync` 只把 `providers` 写入 Pi/Prime models.json。
+- 默认 provider/model 从 `config/models.yaml` 的 `default` 读取，环境变量仍优先；`models sync` 只把 `providers` 写入 Pi/Prime models.json。L3 状态栏显示 Router 模型名（`config/models.yaml` 的 `name`，缺失时用 `provider/model`）；Worker 模型由 `config/profiles.yaml` 的 profile `provider/model/thinking` 决定。
 - 已用真实 DeepSeek 跑通 prepare + git worktree + artifacts copy-out：Task `tsk_19178d670a9f41759178` succeeded，workspace branch/commit 正确，artifact 复制成功（`docs/spikes/prepare-artifacts-e2e.md`）。
 - 发现并修复 resident kernel 环境过期问题：Worker 在每个 workspace 写 `.super-rlm-report.json`，skill 通过 `SUPER_RLM_REPORT_CONFIG` 每次读取当前 assignment 的 report URL/token。
 - 下一阶段是 L3 体验打磨、安装器/CI、可观测性；Worker 隔离暂时搁置，发行/打包暂不做。

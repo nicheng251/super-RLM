@@ -79,6 +79,7 @@ export class SidebarPane implements Component {
 
 export interface StatusModel {
   projectId: string;
+  routerModel: string;
   orchestrator: boolean;
   worker: boolean;
   sse: boolean;
@@ -98,6 +99,7 @@ export class StatusBar implements Component {
     const parts = [
       bold(cyan("super-RLM")),
       gray(model.projectId),
+      gray(`router:${model.routerModel}`),
       dot(model.orchestrator, "orch"),
       dot(model.worker, "worker"),
       dot(model.sse, "sse"),

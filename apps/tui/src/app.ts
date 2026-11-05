@@ -368,8 +368,10 @@ export class TuiApp {
   }
 
   private statusModel(): StatusModel {
+    const routerModel = this.config.primeModelName ?? `${this.config.primeProvider}/${this.config.primeModel}`;
     return {
       projectId: this.config.projectId,
+      routerModel,
       orchestrator: this.state.health.orchestrator,
       worker: this.state.health.worker,
       sse: this.state.health.sse,

@@ -29,6 +29,7 @@ export interface CliConfig {
   workerPrompt: string;
   primeProvider: string;
   primeModel: string;
+  primeModelName: string | null;
   bashShell: string | null;
   maxConcurrency: number;
 }
@@ -40,6 +41,8 @@ export function findRepoRoot(): string {
 export interface ModelDefault {
   provider: string;
   model: string;
+  /** Human-readable model name from config/models.yaml, when present. */
+  name?: string;
 }
 
 /** Reads the CLI-only `default` section from a models config. A missing, unreadable, or malformed file yields null. */
@@ -57,7 +60,21 @@ export function readModelDefault(path: string): ModelDefault | null {
   const provider = (section as { provider?: unknown }).provider;
   const model = (section as { model?: unknown }).model;
   if (typeof provider !== "string" || !provider || typeof model !== "string" || !model) return null;
-  return { provider, model };
+  const result: ModelDefault = { provider, model };
+  const providers = (parsed as { providers?: unknown }).providers;
+  if (providers && typeof providers === "object") {
+    const providerEntry = (providers as Record<string, unknown>)[provider];
+    if (providerEntry && typeof providerEntry === "object") {
+      const models = (providerEntry as { models?: unknown }).models;
+      if (Array.isArray(models)) {
+        const match = models.find((entry) => entry && typeof entry === "object" && (entry as { id?: unknown }).id === model);
+        if (match && typeof (match as { name?: unknown }).name === "string") {
+          result.name = (match as { name: string }).name;
+        }
+      }
+    }
+  }
+  return result;
 }
 
 export function readProjectId(cwd = process.cwd(), env = process.env): string {
@@ -122,6 +139,7 @@ export function loadConfig(options: {
     workerPrompt: join(repoRoot, "apps", "worker", "prompts", "worker.md"),
     primeProvider: env.SUPER_RLM_PRIME_PROVIDER ?? modelDefault?.provider ?? "fake",
     primeModel: env.SUPER_RLM_PRIME_MODEL ?? modelDefault?.model ?? "fake-1",
+    primeModelName: env.SUPER_RLM_PRIME_PROVIDER || env.SUPER_RLM_PRIME_MODEL ? null : modelDefault?.name ?? null,
     bashShell,
     maxConcurrency: Number(env.SUPER_RLM_MAX_CONCURRENCY ?? "2"),
   };

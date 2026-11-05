@@ -66,6 +66,86 @@ default:
 
 `SUPER_RLM_PRIME_PROVIDER` and `SUPER_RLM_PRIME_MODEL` still override the file.
 
+### Router model vs Worker model
+
+There are two independent model settings:
+
+```text
+config/models.yaml default
+  -> Router model (the Pi session that talks to you)
+
+config/profiles.yaml profiles.<name>.provider/model
+  -> Worker model for Tickets that select that profile
+```
+
+The Router model is resolved by `loadConfig` in this order:
+
+```text
+SUPER_RLM_PRIME_PROVIDER / SUPER_RLM_PRIME_MODEL
+  > config/models.yaml default
+  > fake/fake-1
+```
+
+The Worker model is resolved per Assignment:
+
+```text
+profile.provider / profile.model / profile.thinking
+  > Worker fallback SUPER_RLM_PRIME_PROVIDER / SUPER_RLM_PRIME_MODEL
+```
+
+The Router chooses a profile by name, not a raw model. The Orchestrator
+validates the profile and sends `ExecutionOptions` to the Worker.
+
+The L3 status bar shows the Router model as:
+
+```text
+router:DeepSeek V4.1 Flash
+```
+
+`DeepSeek V4.1 Flash` is the `name` of the model entry in
+`config/models.yaml`. If no display name exists, it falls back to
+`provider/model`.
+
+To add a Worker model:
+
+```yaml
+# config/models.yaml
+providers:
+  deepseek:
+    models:
+      - id: deepseek-flash
+        name: DeepSeek V4.1 Flash
+
+# config/profiles.yaml
+profiles:
+  default:
+    provider: deepseek
+    model: deepseek-flash
+    thinking: medium
+```
+
+Then sync the project-local Pi/Prime model registry and restart services:
+
+```powershell
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts models sync
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts down
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts up
+```
+
+`models sync` writes `<SUPER_RLM_HOME>/pi/agent/models.json` and
+`<SUPER_RLM_HOME>/prime/agent/models.json`; it does not write user-global
+config. Orchestrator and Worker must be restarted to pick up changed profiles
+or model registries.
+
+Useful checks:
+
+```powershell
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts models sync --dry-run
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles list
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles show git
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles validate
+```
+
 ## 2. Start the Router
 
 ```powershell

@@ -62,6 +62,7 @@ providers:
   local:
     models:
       - id: local-model
+        name: Local Model
 `;
 
 test("loadConfig reads the default provider/model from models.yaml", () => {
@@ -69,7 +70,8 @@ test("loadConfig reads the default provider/model from models.yaml", () => {
   const config = loadConfig({ env: { SUPER_RLM_HOME: "/tmp/super-rlm-home" }, cwd: tmpdir(), modelsConfigPath });
   assert.equal(config.primeProvider, "local");
   assert.equal(config.primeModel, "local-model");
-  assert.deepEqual(readModelDefault(modelsConfigPath), { provider: "local", model: "local-model" });
+  assert.deepEqual(readModelDefault(modelsConfigPath), { provider: "local", model: "local-model", name: "Local Model" });
+  assert.equal(config.primeModelName, "Local Model");
 });
 
 test("environment provider/model override the models.yaml default", () => {
