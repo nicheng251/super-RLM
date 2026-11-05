@@ -1,154 +1,102 @@
 # super-RLM
 
-> Local-first meta-agent runtime: Pi Router → Orchestrator → Worker → Prime Agent RLM.
+**A local-first agent runtime for long-running work.**
 
-**Version: v0.1.0** · Windows-first · 本地优先 · 无后台服务常驻
+super-RLM lets you give one task to a planning agent, split it into smaller
+Tickets, run them in parallel, and keep track of every result, session, and
+delivered file.
 
-super-RLM 把一次自然语言请求拆成可调度的 Ticket，交给隔离的 Worker 执行；
-每个 Worker 内部运行 Prime Agent，可以继续递归 `rlm.spawn` 子 Agent。
-它不替代 Pi 或 Prime，而是把两者组织成一个可控、可观察、可恢复的本地 Agent 平台。
+It is built on top of [Pi](https://github.com/earendil-works/pi) and
+[Prime Agent](https://github.com/PrimeIntellect-ai/prime-agent), but adds the
+part those tools do not provide by themselves: a task queue, isolated workers,
+profiles, human-in-the-loop answers, resumable sessions, and a terminal UI for
+watching the whole thing.
+
+Current version: **v0.1.0** · Windows 10/11 x64
 
 ---
 
-## 1. 它解决什么问题
+## Why
 
-单 Agent 做长任务时常见问题：
+A single agent session gets messy when a task is large:
 
-- 一个上下文越来越长
-- 多件事混在一个对话里
-- 失败后难以重试部分工作
-- 无法并行
-- 结果、文件、session 和状态难以追踪
-- 权限和清理边界不清晰
+- one long conversation mixes several jobs together;
+- a failure in one step blocks everything;
+- parallel work is hard to track;
+- results and files end up in random places;
+- restarting means losing context;
+- every job runs with the same model and permissions.
 
-super-RLM 的模型：
+super-RLM separates the work:
 
 ```text
-用户
-  ↓
-Pi Router（规划、拆分、选择 profile）
-  ↓
-Orchestrator（Task/Ticket 状态机、SQLite、调度、SSE）
-  ↓
-Worker（准备 workspace、启动 Prime Agent ACP）
-  ↓
-Prime Agent（执行 Ticket，可递归 rlm.spawn）
-  ↓
-super_rlm_report（结构化回传）
+You
+ ↓
+Router          plans the work and creates Tickets
+ ↓
+Orchestrator    queues, schedules, retries, records state
+ ↓
+Worker          prepares a workspace and runs one Ticket
+ ↓
+Prime Agent     does the actual work, including RLM subagents
+ ↓
+Report          structured result, files, and session reference
 ```
 
 ---
 
-## 2. 核心能力
+## Features
 
-- **Task / Ticket 拆分**：Router 把独立工作拆成 Ticket。
-- **并行调度**：Orchestrator 管理 slot、并发、优先级、重试和恢复。
-- **Worker profile**：不同 Ticket 使用不同模型、thinking、workspace、交付策略。
-- **Prime Agent RLM**：Worker 内可递归 `rlm.spawn` 子 Agent。
-- **HITL**：`waiting` / `blocked` Ticket 可以回答后 resume。
-- **Session resume**：使用 durable `session_ref` 继续 Prime session。
-- **结果交付**：artifacts 或 workspace 复制回启动目录。
-- **L3 TUI**：Chat、Tasks、Task Detail、Workers、Events、模型/Profile 选择器、Session viewer。
-- **Windows Job 隔离**：TUI、Orchestrator、Worker、Prime daemon 和 kernel 都在同一个 Job Object 中。
-- **显式 daemon 生命周期**：Worker 启动时启动 Prime daemon，TUI 退出时有序停止。
-- **本地 secrets**：随机 token、loopback 绑定、callback 基础 SSRF 防护。
-- **清理与备份**：`gc`、`backup/restore`、日志轮转、启动 GC。
-- **安装器**：Windows 用户级 ZIP + PowerShell 安装器，uv 内置，Prime Agent 随包分发。
-
----
-
-## 3. 系统结构
-
-```text
-super-rlm (TUI supervisor)
-  └─ Windows Job Object (KILL_ON_JOB_CLOSE)
-       ├─ Orchestrator
-       ├─ Worker
-       │    └─ Prime daemon
-       │         ├─ session worker
-       │         └─ Python kernel
-       └─ TUI (Pi Router RPC)
-```
-
-主要组件：
-
-```text
-apps/router          Pi Router extension：控制面工具 + SSE + L2 页面
-apps/orchestrator    TypeScript 控制面：状态机、SQLite、调度、outbox
-apps/worker          Python FastAPI + Prime Agent ACP adapter
-apps/cli             super-rlm 启动器、安装后维护、Job supervisor 调用
-apps/tui             L3 终端 UI
-packages/protocol    JSON Schema、Python pydantic、TypeScript 类型
-config/models.yaml   Provider/模型注册表
-config/profiles.yaml Worker profile 定义
-```
+- **Plan once, run many parts** — the Router turns a request into Tasks and
+  Tickets.
+- **Parallel execution** — independent Tickets run at the same time.
+- **Per-Ticket profiles** — choose model, reasoning level, workspace, and
+  delivery behaviour for each kind of work.
+- **Human in the loop** — answer a waiting Ticket and resume it later.
+- **Resumable sessions** — Prime Agent sessions survive interruptions.
+- **Real file delivery** — results can be copied back to the directory where
+  you started.
+- **A terminal UI** — watch Chat, Tasks, Workers, and Events in one place.
+- **Session viewer** — inspect what a Worker actually did, read-only.
+- **Clean lifecycle** — the Windows installer/runtime owns its processes and
+  shuts them down when the UI exits.
 
 ---
 
-## 4. 环境要求
+## Requirements
 
-### 运行
+- Windows 10 or 11, x64
+- Node.js **22.19 or newer**
+- PowerShell 5.1 or newer
+- Network access during install (npm) and first-time setup (PyPI)
 
-- Windows 10/11 x64
-- Node.js **>= 22.19**（宿主机自备，不随包分发）
-- 网络：
-  - 安装时访问 npm registry
-  - 首次 setup 访问 PyPI
-- PowerShell 5.1+
-
-### 安装包已包含
-
-- Prime Agent 固定版本二进制
-- `prime-agent-runtime`
-- `uv.exe`
-- Pi 依赖清单
-- Worker/Orchestrator/Router/TUI 源码
-
-### 当前平台限制
-
-- TUI supervisor 目前只支持 Windows Job Object。
-- 非 Windows 入口会 fail-closed，不会降级成无隔离启动。
+Node is a host prerequisite; it is not bundled.
 
 ---
 
-## 5. 安装
+## Install
 
-### 5.1 从 release ZIP 安装
+Download and extract a release ZIP, then run:
 
 ```powershell
-Expand-Archive .\super-rlm-v0.1.0-win-x64.zip -DestinationPath .
 powershell -NoProfile -ExecutionPolicy Bypass -File .\super-rlm-v0.1.0-win-x64\installer\install.ps1
 ```
 
-默认安装到：
+The installer puts the app under:
 
 ```text
 %LOCALAPPDATA%\Programs\super-RLM\
-  current
-  versions\0.1.0
-  bin\super-rlm.cmd
 ```
 
-安装器会：
+and adds `super-rlm` to your user `PATH`. Open a new terminal afterwards.
 
-- 检查 Node >= 22.19
-- 校验 SHA256SUMS
-- 安装 Pi / CLI / Orchestrator / Router / TUI 的 npm 依赖
-- 用内置 uv 创建 `apps\worker\.venv`
-- 安装 Worker runtime
-- 创建 `super-rlm` 命令
-- 默认把 `bin` 加入用户 PATH
-
-新开一个终端后检查：
+Verify:
 
 ```powershell
 super-rlm --version
-super-rlm status
 ```
 
-### 5.2 从源码运行
-
-需要 Node >= 22.19、`uv`、PowerShell。
+### From source
 
 ```powershell
 git clone https://github.com/nicheng251/super-RLM.git
@@ -160,87 +108,58 @@ npm ci --prefix apps/router
 npm ci --prefix apps/tui
 ```
 
-首次在项目目录运行：
-
-```powershell
-cd C:\path\to\your-project
-super-rlm setup
-super-rlm
-```
-
 ---
 
-## 6. 首次运行
+## First run
 
-`super-rlm setup` 只准备当前项目，不启动 TUI：
+Run setup once inside the project you want the agents to work on:
 
 ```powershell
 cd C:\path\to\your-project
 super-rlm setup
 ```
 
-它会：
+The setup command:
 
-1. 创建 `.super-rlm-project.json`
-2. 检查 Node、uv、provider key
-3. 创建项目 kernel venv
-4. 创建 Worker venv
-5. 安装 Prime kernel runtime、默认 Python 包、report skill
-6. 写入项目本地 Pi/Prime `models.json`
-7. 运行 `doctor`
+- creates the project runtime;
+- checks Node and `uv`;
+- installs the Worker and Prime Agent runtime;
+- writes the local model registry;
+- checks for a provider API key.
 
-缺少 API key 时：
+If the key is missing, it prints the exact line to add to:
 
 ```text
-Add this line to <home>/secrets/providers.env:
-  DEEPSEEK_API_KEY=<your deepseek API key>
+<SUPER_RLM_HOME>\secrets\providers.env
 ```
 
-然后重新运行：
+Then run setup again:
 
 ```powershell
 super-rlm setup
-```
-
-可以先用 `--allow-missing-key` 跳过 key 检查：
-
-```powershell
-super-rlm setup --allow-missing-key
-```
-
-Provider 可以显式选择：
-
-```powershell
-super-rlm setup --provider deepseek --model deepseek-flash
-```
-
----
-
-## 7. 使用
-
-### 7.1 启动
-
-```powershell
-cd C:\path\to\your-project
 super-rlm
 ```
 
-`super-rlm` 会直接启动 L3 TUI，并拥有整个运行栈：
+`super-rlm` starts the terminal UI and the local stack. Closing the UI stops the
+stack; there is no background service mode.
 
-- Orchestrator
-- Worker
-- Prime daemon
-- TUI
+---
 
-退出 TUI 时全部停止。没有后台 `up` 模式。
+## Usage
 
-兼容别名：
+### Start
+
+```powershell
+super-rlm
+```
+
+or, equivalently:
 
 ```powershell
 super-rlm tui
 ```
 
-### 7.2 L3 视图
+### Main views
 
 ```text
 Alt+1  Chat
@@ -249,17 +168,16 @@ Alt+3  Workers
 Alt+4  Events
 ```
 
-- Task Detail 不是侧边栏页面，而是 Tasks 中按 Enter 打开的子页面。
-- Task Detail 中按 `Esc` 返回 Tasks。
-- `Task Detail -> v` 打开只读 Ticket Session viewer。
-- `Esc` 逐级返回。
+- `Enter` in Tasks opens Task Detail.
+- `Esc` goes back one level.
+- `v` in Task Detail opens a read-only Ticket session.
+- `/model` opens the model and profile selector.
 
-### 7.3 Chat 命令
+### Common chat commands
 
 ```text
 /filter [all|waiting|running|terminal]
 /search <text>
-/clear
 /refresh
 /answer
 /abort
@@ -268,380 +186,159 @@ Alt+4  Events
 /help
 ```
 
-`/model` 打开两级 Model & Profiles 页面：
+### Check or stop
 
-```text
-Profile 页：↑↓ 选择，Enter 进入，Esc 关闭
-模型页：   ↑↓ 选模型，←→ 调 thinking
-           Enter 应用并返回 Profile 页
-           Esc 返回 Profile 页
+```powershell
+super-rlm status
+super-rlm down
 ```
-
-可配置：
-
-- Router 当前模型/thinking
-- Worker profile 模型/thinking
-- Worker override 保存到 `<home>/profiles.overrides.json`
-
-### 7.4 Ticket Session
-
-Task Detail 中选择 Ticket，按：
-
-```text
-v
-```
-
-只读查看最近 100 条 Prime JSONL 消息：
-
-- user / assistant
-- thinking
-- tool call
-- tool result（截断）
-- j/k 滚动
-- r 刷新
-- Esc 返回 Task Detail
 
 ---
 
-## 8. 配置
+## Configuration
 
-### 8.1 模型注册表
+Two files control what runs:
 
-```yaml
-# config/models.yaml
-default:
-  provider: deepseek
-  model: deepseek-flash
-  thinking: medium
-
-providers:
-  deepseek:
-    name: DeepSeek
-    api: openai-completions
-    baseUrl: https://api.deepseek.com/v1
-    apiKey: $DEEPSEEK_API_KEY
-    authHeader: true
-    models:
-      - id: deepseek-flash
-        name: DeepSeek V4.1 Flash
-        contextWindow: 1048576
-        maxTokens: 393216
+```text
+config/models.yaml     provider and model registry
+config/profiles.yaml   Worker profiles
 ```
 
-同步到项目本地 Pi/Prime：
-
-```powershell
-super-rlm models sync
-```
-
-### 8.2 Worker profiles
+A profile is a named execution policy. For example:
 
 ```yaml
-# config/profiles.yaml
 profiles:
   default:
     provider: deepseek
     model: deepseek-flash
     thinking: medium
     capabilities: [code, script, docs]
-    requires_repo: false
-    read_only: false
-    write_files: true
-    workspace:
-      agent_cwd: "."
-      artifact_root: "."
     delivery:
       mode: artifacts
-
-  git:
-    provider: deepseek
-    model: deepseek-flash
-    thinking: medium
-    capabilities: [code, git, refactor]
-    requires_repo: true
-    blocked_commands: [git, gh]
-    workspace:
-      agent_cwd: repo
-      artifact_root: "."
-    delivery:
-      mode: none
 ```
 
-Worker profile 可以独立设置：
+The Router chooses a profile by name; it never chooses a raw model or receives
+an API key.
 
-- provider/model/thinking
-- timeout
-- prepare_command
-- blocked_commands
-- workspace
-- delivery
-- read_only / write_files
-
-Router 只选择 profile 名称，不直接传模型或密钥。
-
-### 8.3 Secrets
-
-本地 secrets：
+Secrets stay outside the repository:
 
 ```text
-<SUPER_RLM_HOME>/secrets/api.env
-<SUPER_RLM_HOME>/secrets/providers.env
+<SUPER_RLM_HOME>\secrets\providers.env
+<SUPER_RLM_HOME>\secrets\api.env
 ```
 
-`api.env` 由 CLI 首次生成：
+`providers.env` contains your provider key. `api.env` is generated
+automatically and contains local service tokens.
 
-- router token
-- worker token
-- callback key
-
-`providers.env` 需要用户自己填写：
-
-```text
-DEEPSEEK_API_KEY=...
-```
-
-不要把 secrets 提交到 Git。
-
----
-
-## 9. CLI
-
-```text
-super-rlm                    启动 L3 TUI 和整个运行栈
-super-rlm tui                同 super-rlm
-super-rlm setup              首次项目初始化
-super-rlm status             查看 Orchestrator/Worker/supervisor/daemon
-super-rlm down               停止当前栈和项目 daemon
-super-rlm init               创建项目 marker
-super-rlm bootstrap          创建 kernel/Worker venv 和 runtime
-super-rlm doctor             环境/依赖/服务检查
-super-rlm models sync        写入项目 Pi/Prime models.json
-super-rlm profiles list      查看 Worker profile
-super-rlm profiles show <n>  查看单个 profile
-super-rlm profiles validate  校验 profile
-super-rlm profiles reset <n> 删除 profile override
-super-rlm profiles reset --all
-super-rlm tasks              查看 Task
-super-rlm artifacts <id>     复制 Ticket artifacts
-super-rlm gc                 清理旧资源（默认 dry-run）
-super-rlm backup <dir>       离线备份
-super-rlm restore <dir>      恢复备份
-super-rlm config             输出脱敏配置
-```
-
-已删除：
-
-```text
-super-rlm up
-super-rlm router
-super-rlm dev
---no-services
-```
-
----
-
-## 10. 数据目录
-
-```text
-<SUPER_RLM_HOME>/
-  secrets/
-  pi/
-    agent/
-    sessions/
-  prime/
-    agent/
-    sessions/
-    daemon/
-    harness/
-    kernel-venv/
-  workspaces/
-  tmp/
-  orchestrator/
-    orchestrator.sqlite
-    backups/
-  profiles.overrides.json
-```
-
-默认：
-
-```text
-%USERPROFILE%\.super-rlm\projects\<project-id>\
-```
-
-GC：
+Sync model changes with:
 
 ```powershell
-super-rlm gc                         # dry-run
-super-rlm gc --apply
-super-rlm gc --apply --older-than 14
-super-rlm gc --apply --worktrees
+super-rlm models sync
 ```
-
-只删除 terminal Ticket/Task 的旧资源；运行中的栈会拒绝执行。
 
 ---
 
-## 11. 安全边界
-
-当前威胁模型是 **A：防误操作，不假设 Agent 主动攻击宿主机**。
-
-已实现：
-
-- Windows Job Object + `KILL_ON_JOB_CLOSE`
-- Worker 显式拥有 daemon
-- loopback-only 服务绑定
-- 随机 token
-- callback 基础 SSRF 防护
-- 每 Ticket TEMP / PIP / NPM / XDG 隔离
-- prepare 输出 secret 脱敏
-- `read_only` 作为策略元数据
-
-**未实现**：
-
-- 模型 Proxy
-- Restricted Token
-- AppContainer
-- 真正 `read_only` 文件系统强制
-- 网络出口 allowlist
-
-因此：
-
-> 不要在当前版本中直接执行不可信仓库、不可信 Prompt 或不可信代码。
-> `blocked_commands` 是 PATH shim，不是安全沙箱。
-
----
-
-## 12. 开发
-
-### 测试
-
-```powershell
-cd packages/protocol/python
-.venv\Scripts\python.exe -m pytest -q
-
-cd apps/orchestrator
-npm test
-npm run check
-
-cd apps/worker
-.venv\Scripts\python.exe -m pytest -q
-
-cd apps/cli
-npm test
-npm run check
-
-cd apps/router
-npm test
-npm run check
-
-cd apps/tui
-npm test
-npm run check
-```
-
-当前：
+## Useful commands
 
 ```text
-protocol      28
-orchestrator  67
-worker        96
-cli           96
-router         2
-tui           27
-total        316
+super-rlm setup              first-time project setup
+super-rlm status             show the local stack
+super-rlm down               stop the stack
+super-rlm doctor             check the environment
+super-rlm models sync        update Pi/Prime model registries
+super-rlm profiles list      list Worker profiles
+super-rlm tasks              list Tasks
+super-rlm artifacts <id>     copy Ticket artifacts
+super-rlm gc                 clean old resources (dry-run by default)
+super-rlm backup <dir>       back up the local runtime
+super-rlm restore <dir>      restore a backup
 ```
 
-### Windows 生命周期回归
+---
+
+## Security
+
+super-RLM is designed for a **trusted local machine** and a **trusted
+repository**.
+
+The current release provides process isolation, local tokens, loopback-only
+services, per-Ticket temporary directories, and basic callback protection. It
+does **not** provide a full filesystem sandbox, network egress policy, or
+credential proxy.
+
+Do not use it to run untrusted code or untrusted prompts yet.
+
+See [docs/architecture.md](docs/architecture.md) for the current boundaries.
+
+---
+
+## Development
+
+Run the test suites:
+
+```powershell
+cd packages/protocol/python; .venv\Scripts\python.exe -m pytest -q
+cd apps/orchestrator; npm test; npm run check
+cd apps/worker; .venv\Scripts\python.exe -m pytest -q
+cd apps/cli; npm test; npm run check
+cd apps/router; npm test; npm run check
+cd apps/tui; npm test; npm run check
+```
+
+Windows lifecycle regression:
 
 ```powershell
 apps\worker\.venv\Scripts\python.exe scripts\regression\windows_lifecycle.py
 ```
 
-覆盖：
-
-- Job 正常退出
-- TUI 异常退出
-- supervisor 被强杀
-- 启动失败
-- daemon 生命周期
-- 可选真实 Prime Agent admin smoke
-
-### 真实模型 E2E
+Real-model tests are opt-in and cost money:
 
 ```powershell
 apps\worker\.venv\Scripts\python.exe scripts\regression\real_model.py --help
-apps\worker\.venv\Scripts\python.exe scripts\regression\l3_chat.py --help
 ```
-
-会产生真实模型费用。
 
 ---
 
-## 13. 安装器与发布
-
-构建 release：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package\windows.ps1 `
-  -UvPath C:\Users\me\.local\bin\uv.exe
-```
-
-输出：
+## Project layout
 
 ```text
-dist\super-rlm-v0.1.0-win-x64.zip
-dist\super-rlm-v0.1.0-win-x64.zip.sha256
+apps/router          Router extension: planning tools and SSE
+apps/orchestrator    Task/Ticket state machine and scheduler
+apps/worker          Prime Agent ACP adapter
+apps/cli             super-rlm launcher, setup, and maintenance
+apps/tui             L3 terminal UI
+packages/protocol    Shared schemas and types
+config/              Model and profile configuration
+installer/           Windows installer
+docs/                Architecture, guides, ADRs, and E2E evidence
 ```
-
-安装：
-
-```powershell
-installer\install.ps1
-```
-
-卸载：
-
-```powershell
-installer\install.ps1 -Uninstall
-```
-
-保留项目数据是默认行为；`-PurgeData` 会删除 `%USERPROFILE%\.super-rlm`。
 
 ---
 
-## 14. 文档
+## Status
 
-- [架构](docs/architecture.md)
-- [项目结构](docs/project-structure.md)
-- [开发指南](docs/guides/developing-with-super-rlm.md)
-- [L3 TUI](docs/guides/l3-tui.md)
-- [ADR](docs/adr/)
-- [Spike 与 E2E 证据](docs/spikes/)
-- [Windows 安装器](installer/README.md)
+- v0.1.0
+- Windows 10/11 x64
+- Real TUI + Windows Job + DeepSeek E2E passed
+- 316 tests passing
+- Installer, lifecycle regression, session viewer, and cleanup tools included
 
----
+Not included yet:
 
-## 15. 当前状态
-
-- 版本：`v0.1.0`
-- 平台：Windows 10/11 x64
-- 真实 DeepSeek TUI + Job + daemon E2E 已通过
-- 真实 TUI/Job 证据：
-  - `docs/spikes/real-tui-job-e2e.md`
-- 生命周期回归：5/5 普通 cases，6/6 `--real-prime`
-- 测试：316 个
-
-暂未完成：
-
-- MSI / 代码签名 / 自动更新
+- MSI / code signing / auto-update
 - CI
-- 跨平台 Job 等价方案
-- Worker 交互式 attach
-- P0-A2 文件系统隔离
-- 模型 Proxy
+- cross-platform process isolation
+- interactive `prime-agent attach`
+- full filesystem sandbox / credential proxy
 
 ---
 
-## 16. 一句话
+## Documentation
 
-**super-RLM 是一个把 Pi Router、Orchestrator、Worker、Prime Agent RLM 组织成本地可调度执行栈的实验性平台。**
+- [Architecture](docs/architecture.md)
+- [Project structure](docs/project-structure.md)
+- [Development guide](docs/guides/developing-with-super-rlm.md)
+- [L3 TUI guide](docs/guides/l3-tui.md)
+- [Windows installer](installer/README.md)
+- [ADRs](docs/adr/)
+- [Spikes and E2E evidence](docs/spikes/)
