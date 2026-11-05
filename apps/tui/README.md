@@ -74,4 +74,10 @@ command mode:
 /help
 ```
 
+`/model` opens a full-width Model & Profiles overlay. Tab switches panes,
+Up/Down selects, Left/Right adjusts thinking, Enter applies, and Esc closes.
+The overlay covers the sidebar and disables Alt+1..4 while open. Router changes
+apply to the current session; Worker profile changes persist to
+`<SUPER_RLM_HOME>/profiles.overrides.json`.
+
 View switching is `Alt+1..4` only. The Chat editor autocompletes slash commands after `/`.

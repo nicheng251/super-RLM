@@ -58,6 +58,18 @@ export class TuiApi {
     return Array.isArray(raw) ? raw as ProfileSummary[] : [];
   }
 
+  async updateProfile(name: string, patch: { provider: string; model: string; thinking: string }): Promise<ProfileSummary> {
+    const response = await fetch(`${this.baseUrl}/v1/profiles/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      headers: { authorization: `Bearer ${this.token}`, "content-type": "application/json" },
+      body: JSON.stringify(patch),
+      signal: AbortSignal.timeout(5000),
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`profile update ${response.status}: ${text}`);
+    return JSON.parse(text) as ProfileSummary;
+  }
+
   async listWorkers(): Promise<WorkerView[]> {
     const response = await fetch(`${this.baseUrl}/v1/workers`, {
       headers: { authorization: `Bearer ${this.token}` },

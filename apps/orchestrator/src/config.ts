@@ -7,6 +7,7 @@ export interface AppConfig {
   port: number;
   dbPath: string;
   workspaceRoot: string;
+  profileOverridesPath: string;
   routerToken: string;
   workerToken: string;
   callbackUrl: string | null;
@@ -25,6 +26,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: Number(env.SUPER_RLM_PORT ?? "8787"),
     dbPath: env.SUPER_RLM_DB ?? join(home, "orchestrator", "orchestrator.sqlite"),
     workspaceRoot: env.SUPER_RLM_WORKSPACES ?? join(home, "workspaces"),
+    profileOverridesPath: env.SUPER_RLM_PROFILE_OVERRIDES ?? join(home, "profiles.overrides.json"),
     routerToken: env.SUPER_RLM_ROUTER_TOKEN ?? "dev-router-token",
     workerToken: env.SUPER_RLM_WORKER_TOKEN ?? "dev-worker-token",
     callbackUrl: env.SUPER_RLM_CALLBACK_URL?.trim() || null,

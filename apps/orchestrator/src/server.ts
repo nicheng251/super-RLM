@@ -23,6 +23,7 @@ export interface ServerOptions {
   workerToken: string;
   callbackKey: string;
   profiles?: ProfileSummary[];
+  updateProfile?: (name: string, patch: Record<string, unknown>) => ProfileSummary;
   bodyLimitBytes?: number;
 }
 
@@ -76,7 +77,7 @@ async function route(
 
   if (segments[0] === "v1") {
     if (!authorized(req, options.routerToken)) return sendJson(res, 401, unauthorized());
-    return routeRouter(req, res, url, segments, orchestrator, profiles, bodyLimit);
+    return routeRouter(req, res, url, segments, orchestrator, profiles, bodyLimit, options.updateProfile);
   }
 
   return sendJson(res, 404, NOT_FOUND);
@@ -90,11 +91,18 @@ async function routeRouter(
   orchestrator: Orchestrator,
   profiles: NonNullable<ServerOptions["profiles"]>,
   bodyLimit: number,
+  updateProfile?: (name: string, patch: Record<string, unknown>) => ProfileSummary,
 ): Promise<void> {
   const method = req.method ?? "GET";
 
   if (method === "GET" && url.pathname === "/v1/profiles") {
     return sendJson(res, 200, { profiles });
+  }
+
+  if (method === "PATCH" && segments[1] === "profiles" && segments[2] && segments.length === 3) {
+    if (!updateProfile) return sendJson(res, 501, { error: { code: "not_implemented", message: "profile updates are disabled" } });
+    const body = await readJson(req, bodyLimit) as Record<string, unknown>;
+    return sendJson(res, 200, updateProfile(segments[2], body));
   }
 
   if (method === "GET" && url.pathname === "/v1/workers") {

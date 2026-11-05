@@ -28,7 +28,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v5，迁移前自动备份）；44 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；47 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands 和 delivery 测试）。
 - `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles/tui` 可用；30 个 `node:test` 通过；`up/status/down` 已手动验证。
-- 当前单元/集成测试合计 165 个：protocol 26、orchestrator 44、worker 47、cli 30、router 2、tui 16。
+- 当前单元/集成测试合计 168 个：protocol 26、orchestrator 44、worker 47、cli 30、router 2、tui 19。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
 - 已用真实 DeepSeek `deepseek-flash` 跑通：写文件任务成功（`hello.txt` 内容正确），以及 TUI 中 `/tasks` -> Task Detail -> 回答 -> resume -> succeeded。
@@ -53,7 +53,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - 已新增 `GET /v1/workers` 和 WorkerView 协议，TUI Workers 页可用。
 - L3 目前是垂直切片：真实 DeepSeek Chat E2E 已通过；后续继续打磨搜索/过滤、overlay、鼠标和快捷键兼容性。
 - 已实现 `super-rlm artifacts <ticket_id>`：从 Ticket workspace 复制 artifacts 或整个 workspace；workspace/branch/commit 已写入 Ticket result 和 TUI Task Detail。
-- 默认 provider/model 从 `config/models.yaml` 的 `default` 读取，环境变量仍优先；`models sync` 只把 `providers` 写入 Pi/Prime models.json。L3 支持 `/model` 查看/切换 Router 模型与推理强度（`/model list`、`/model thinking <level>`、`/model <provider/model> [level]`）；状态栏显示 Router 模型名、推理强度、上下文窗口（`config/models.yaml` 的 `name`/`thinking`/`contextWindow`，缺失时用 `provider/model` 和 `?`）；Worker 模型由 `config/profiles.yaml` 的 profile `provider/model/thinking` 决定，Task Detail 显示 profile 对应的 model/thinking/context。
+- 默认 provider/model 从 `config/models.yaml` 的 `default` 读取，环境变量仍优先；`models sync` 只把 `providers` 写入 Pi/Prime models.json。L3 `/model` 打开全宽 Model & Profiles 覆盖界面（覆盖侧边栏、禁用 Alt 切换；Tab/↑↓/←→/Enter/Esc）；可配置 Router 和 Worker profiles 的模型与推理强度，Worker 覆盖写入 `<SUPER_RLM_HOME>/profiles.overrides.json`；状态栏显示 Router 模型名、推理强度、上下文窗口（`config/models.yaml` 的 `name`/`thinking`/`contextWindow`，缺失时用 `provider/model` 和 `?`）；Worker 模型由 `config/profiles.yaml` 的 profile `provider/model/thinking` 决定，Task Detail 显示 profile 对应的 model/thinking/context。
 - 已用真实 DeepSeek 跑通 prepare + git worktree + artifacts copy-out：Task `tsk_19178d670a9f41759178` succeeded，workspace branch/commit 正确，artifact 复制成功（`docs/spikes/prepare-artifacts-e2e.md`）。
 - 发现并修复 resident kernel 环境过期问题：Worker 在每个 workspace 写 `.super-rlm-report.json`，skill 通过 `SUPER_RLM_REPORT_CONFIG` 每次读取当前 assignment 的 report URL/token。
 - 下一阶段是 L3 体验打磨、安装器/CI、可观测性；Worker 隔离暂时搁置，发行/打包暂不做。

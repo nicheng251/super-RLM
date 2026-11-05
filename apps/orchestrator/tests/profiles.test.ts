@@ -10,7 +10,7 @@ import { loadConfig } from "../src/config.ts";
 import { Store } from "../src/db.ts";
 import { Orchestrator, OrchestratorError } from "../src/orchestrator.ts";
 import type { DispatchFn } from "../src/orchestrator.ts";
-import { defaultProfilesPath, loadProfiles, profileExecution, profileSummaries } from "../src/profiles.ts";
+import { defaultProfilesPath, loadProfiles, profileExecution, profileSummaries, updateProfile } from "../src/profiles.ts";
 import { createOrchestratorServer, serverAddress } from "../src/server.ts";
 import type { ExecutionRequest } from "../../../packages/protocol/ts/index.ts";
 
@@ -214,11 +214,18 @@ test("HTTP profiles, unknown profile rejection, and dispatch execution options",
     max_concurrency: 4,
     version: "test",
   });
+  const profileList = profileSummaries(profiles);
   const server = createOrchestratorServer(orchestrator, {
     routerToken: "router-token",
     workerToken: "worker-token",
     callbackKey: "callback-key",
-    profiles: profileSummaries(profiles),
+    profiles: profileList,
+    updateProfile: (name, patch) => {
+      const updated = updateProfile(profiles, name, patch);
+      const index = profileList.findIndex((profile) => profile.name === name);
+      if (index >= 0) profileList[index] = updated;
+      return updated;
+    },
   });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -236,6 +243,15 @@ test("HTTP profiles, unknown profile rejection, and dispatch execution options",
     assert.equal(body.profiles[2].write_files, false);
     assert.equal("prepare_command" in body.profiles[1], false);
     assert.equal("blocked_commands" in body.profiles[1], false);
+
+    const patched = await fetch(`${base}/v1/profiles/git`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ thinking: "high" }),
+    });
+    assert.equal(patched.status, 200);
+    const patchedBody = await patched.json() as { thinking: string };
+    assert.equal(patchedBody.thinking, "high");
 
     const unknown = await fetch(`${base}/v1/tasks`, {
       method: "POST",
@@ -272,6 +288,7 @@ test("HTTP profiles, unknown profile rejection, and dispatch execution options",
     assert.ok(git);
     assert.equal(git.execution?.provider, "deepseek");
     assert.equal(git.execution?.model, "deepseek-flash");
+    assert.equal(git.execution?.thinking, "high");
     assert.equal(git.execution?.workspace.agent_cwd, "repo");
     assert.equal(git.execution?.delivery.mode, "none");
     assert.match(git.execution?.workspace.metadata_command ?? "", /rev-parse/);

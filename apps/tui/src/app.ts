@@ -16,7 +16,7 @@ import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model
 import type { ProfileSummary, TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
-import { COMMAND_HELP, COMMANDS, parseSlashCommand, type SlashCommand, type ThinkingLevel } from "./commands.ts";
+import { COMMAND_HELP, COMMANDS, THINKING_LEVELS, parseSlashCommand, type SlashCommand, type ThinkingLevel } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
 import {
   addEvent,
@@ -32,6 +32,7 @@ import {
   type ViewName,
 } from "./state.ts";
 import { AnswerDialog } from "./ui/answer-dialog.ts";
+import { ModelSelector, type SelectorModel, type SelectorProfile } from "./ui/model-selector.ts";
 import {
   ChatPane,
   Footer,
@@ -91,18 +92,23 @@ export class TuiApp {
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   private taskTimer: ReturnType<typeof setInterval> | null = null;
   private readonly profiles = new Map<string, ProfileSummary>();
+  private modelSelectorOpen = false;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshing = false;
   private shuttingDown = false;
   private readonly originalStderrWrite = process.stderr.write.bind(process.stderr);
   private readonly config: CliConfig;
   private routerModelName: string;
+  private routerProvider: string;
+  private routerModel: string;
   private routerThinking: string;
   private routerContextWindow: number | null;
 
   constructor(config: CliConfig) {
     this.config = config;
     this.routerModelName = config.primeModelName ?? `${config.primeProvider}/${config.primeModel}`;
+    this.routerProvider = config.primeProvider;
+    this.routerModel = config.primeModel;
     this.routerThinking = config.primeThinking ?? "default";
     this.routerContextWindow = config.primeContextWindow;
     this.tui = new TuiAltScreen(new ProcessTerminal());
@@ -171,6 +177,10 @@ export class TuiApp {
   }
 
   private handleGlobalInput(data: string): { consume?: boolean } | undefined {
+    if (this.modelSelectorOpen) {
+      if (data === "\x03") void this.shutdown(0);
+      return undefined;
+    }
     const action = mapKey(data, { view: this.state.view, focus: this.focus, piRunning: this.piRunning });
     if (!action) return undefined;
     void this.runAction(action);
@@ -289,6 +299,10 @@ export class TuiApp {
   }
 
   private async runModelCommand(command: Extract<SlashCommand, { name: "model" }>): Promise<void> {
+    if (!command.action && !command.model && !command.thinking) {
+      await this.openModelSelector();
+      return;
+    }
     if (!this.rpc) {
       this.pushChat({ kind: "error", text: "Router is not ready yet." });
       return;
@@ -352,13 +366,110 @@ export class TuiApp {
     }
   }
 
+  private async openModelSelector(): Promise<void> {
+    if (!this.rpc) {
+      this.pushChat({ kind: "error", text: "Router is not ready yet." });
+      return;
+    }
+    if (this.profiles.size === 0) await this.loadProfiles();
+    let available: SelectorModel[];
+    try {
+      available = (await this.rpc.getAvailableModels()).map((model) => ({
+        provider: model.provider,
+        id: model.id,
+        contextWindow: model.contextWindow ?? null,
+        reasoning: model.reasoning,
+      }));
+    } catch (error) {
+      this.pushChat({ kind: "error", text: `Cannot load models: ${messageOf(error)}` });
+      return;
+    }
+
+    const ensure = (provider: string, model: string, contextWindow: number | null): void => {
+      if (!available.some((entry) => entry.provider === provider && entry.id === model)) {
+        available.push({ provider, id: model, contextWindow });
+      }
+    };
+    ensure(this.routerProvider, this.routerModel, this.routerContextWindow);
+    for (const profile of this.profiles.values()) {
+      const info = lookupModelInfo(this.config.modelsConfigPath, profile.provider, profile.model);
+      ensure(profile.provider, profile.model, info?.contextWindow ?? null);
+    }
+
+    const profiles: SelectorProfile[] = [
+      {
+        key: "router",
+        label: "Router",
+        kind: "router",
+        provider: this.routerProvider,
+        model: this.routerModel,
+        thinking: asThinking(this.routerThinking),
+        contextWindow: this.routerContextWindow,
+      },
+      ...Array.from(this.profiles.values()).map((profile) => ({
+        key: profile.name,
+        label: `Worker: ${profile.name}`,
+        kind: "worker" as const,
+        provider: profile.provider,
+        model: profile.model,
+        thinking: profile.thinking,
+        contextWindow: lookupModelInfo(this.config.modelsConfigPath, profile.provider, profile.model)?.contextWindow ?? null,
+      })),
+    ];
+
+    const selector = new ModelSelector(profiles, available);
+    const previous = this.focus;
+    const handle = this.tui.showOverlay(selector, { width: "100%", maxHeight: "90%", margin: 1, anchor: "center" });
+    this.modelSelectorOpen = true;
+    this.tui.requestRender();
+    selector.onChange = () => this.tui.requestRender();
+    selector.onClose = () => {
+      handle.hide();
+      this.modelSelectorOpen = false;
+      this.setFocus(previous);
+      this.tui.requestRender();
+    };
+    selector.onApply = (choice) => {
+      void (async () => {
+        if (this.piRunning) {
+          selector.setError("Stop the current turn before changing the model.");
+          return;
+        }
+        try {
+          if (choice.kind === "router") {
+            await this.rpc!.setModel(choice.provider, choice.model);
+            await this.rpc!.setThinkingLevel(choice.thinking);
+            await this.syncRouterModelState();
+          } else {
+            const updated = await this.api.updateProfile(choice.key, {
+              provider: choice.provider,
+              model: choice.model,
+              thinking: choice.thinking,
+            });
+            this.profiles.set(updated.name, updated);
+            this.refreshViews();
+          }
+          handle.hide();
+          this.modelSelectorOpen = false;
+          this.setFocus(previous);
+          this.flash(`${choice.label}: ${choice.provider}/${choice.model} · thinking:${choice.thinking}`);
+          this.tui.requestRender();
+        } catch (error) {
+          selector.setError(messageOf(error));
+        }
+      })();
+    };
+  }
+
   private async syncRouterModelState(): Promise<void> {
     if (!this.rpc) return;
     const state = await this.rpc.getState();
     this.routerThinking = state.thinkingLevel;
     const model = state.model as { provider?: string; id?: string; name?: string; contextWindow?: number } | undefined;
     if (model) {
-      this.routerModelName = model.name ?? `${model.provider ?? "?"}/${model.id ?? "?"}`;
+      this.routerProvider = model.provider ?? this.routerProvider;
+      this.routerModel = model.id ?? this.routerModel;
+      this.routerModelName = model.name ?? `${this.routerProvider}/${this.routerModel}`;
       this.routerContextWindow = model.contextWindow ?? null;
     }
   }
@@ -960,6 +1071,10 @@ function stamp(value: string | null | undefined): string {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function asThinking(value: string): ThinkingLevel {
+  return (THINKING_LEVELS as readonly string[]).includes(value) ? value as ThinkingLevel : "medium";
 }
 
 function formatArgs(args: unknown): string {

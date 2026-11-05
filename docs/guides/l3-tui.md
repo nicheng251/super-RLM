@@ -112,9 +112,35 @@ Slash commands:
 /help
 ```
 
-`/model` changes the current Router session only; it does not edit
-`config/models.yaml`. The status bar updates model, thinking level, and context
-window immediately. Model changes are rejected while a Router turn is running.
+`/model` opens a full-width Model & Profiles overlay that covers the sidebar:
+
+```text
+Model & Profiles
+Profiles                 Models
+▸ Router                 ▸ deepseek/deepseek-flash  ctx:1M
+  Worker: default          deepseek/...
+  Worker: git
+Thinking: ← medium →   ctx:1M
+```
+
+Keys:
+
+```text
+Tab       switch Profiles / Models pane
+Up/Down   select profile or model
+Left/Right adjust thinking level
+Enter     apply
+Esc       close
+```
+
+While the overlay is open, Alt+1..4 view switching is disabled.
+Router changes apply to the current Router session. Worker profile changes are
+saved under `<SUPER_RLM_HOME>/profiles.overrides.json` and apply to subsequent
+Tickets without restarting the Orchestrator. `config/profiles.yaml` remains the
+base configuration.
+
+Direct text commands (`/model list`, `/model thinking <level>`) remain as
+fallbacks. Model changes are rejected while a Router turn is running.
 
 View switching is `Alt+1..4` only. Task Detail is a child page of Tasks.
 

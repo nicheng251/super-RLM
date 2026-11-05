@@ -258,6 +258,28 @@ export function profileSummaries(config: ProfilesConfig): ProfileSummary[] {
     .map(profileSummary);
 }
 
+export interface ProfileUpdate {
+  provider?: unknown;
+  model?: unknown;
+  thinking?: unknown;
+}
+
+/** Updates only the model selection fields of an existing profile. */
+export function updateProfile(config: ProfilesConfig, name: string, patch: ProfileUpdate): ProfileSummary {
+  const profile = config.profiles[name];
+  if (!profile) throw new Error(`unknown profile: ${name}`);
+  if (patch.provider !== undefined) profile.provider = requiredText(patch.provider, `${name}.provider`);
+  if (patch.model !== undefined) profile.model = requiredText(patch.model, `${name}.model`);
+  if (patch.thinking !== undefined) {
+    const thinking = requiredText(patch.thinking, `${name}.thinking`);
+    if (!(THINKING_LEVELS as readonly string[]).includes(thinking)) {
+      fail(`${name}.thinking must be one of ${THINKING_LEVELS.join(", ")}`);
+    }
+    profile.thinking = thinking as ThinkingLevel;
+  }
+  return profileSummary(profile);
+}
+
 /** Resolve a profile into the ExecutionOptions sent with an Assignment. */
 export function profileExecution(profile: ProfileConfig): ExecutionOptions {
   return {
