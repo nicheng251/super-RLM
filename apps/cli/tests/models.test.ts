@@ -32,6 +32,20 @@ test("syncModels rejects a missing secret", () => {
   assert.equal(syncModels(config, { configPath: path, env: {} }), 1);
 });
 
+test("syncModels writes only the providers section into models.json", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-models-"));
+  const config = loadConfig({ env: { SUPER_RLM_HOME: home, TEST_MODEL_KEY: "secret-key" }, cwd: tmpdir() });
+  const path = writeConfig(home, "$TEST_MODEL_KEY");
+  writeFileSync(
+    path,
+    `default:\n  provider: local\n  model: local-model\n${readFileSync(path, "utf8")}`,
+  );
+  assert.equal(syncModels(config, { configPath: path, env: { TEST_MODEL_KEY: "secret-key" } }), 0);
+  const pi = JSON.parse(readFileSync(join(home, "pi", "agent", "models.json"), "utf8"));
+  assert.deepEqual(Object.keys(pi), ["providers"]);
+  assert.equal(pi.providers.local.apiKey, "secret-key");
+});
+
 test("loadModelsConfig validates the provider shape", () => {
   const dir = mkdtempSync(join(tmpdir(), "super-rlm-models-"));
   const path = join(dir, "bad.yaml");

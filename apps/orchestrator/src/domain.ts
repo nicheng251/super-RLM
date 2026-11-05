@@ -6,6 +6,9 @@
  * the store and scheduler share one shape.
  */
 
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type {
   Artifact,
   AssignmentEndReason,
@@ -206,9 +209,47 @@ export function canStart(
   return counts.normalRunning < normalCap && counts.taskNormalRunning < policy.perTaskMax;
 }
 
+export interface WorkspaceDetails {
+  workspace: string;
+  branch: string | null;
+  commit: string | null;
+}
+
+function gitValue(checkout: string, args: string[]): string | null {
+  try {
+    const value = execFileSync("git", ["-C", checkout, ...args], {
+      encoding: "utf8",
+      timeout: 2_000,
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+/** A prepared workspace conventionally keeps its checkout in <workspace>/repo. */
+function gitCheckout(workspace: string): string {
+  const nested = join(workspace, "repo");
+  return existsSync(join(nested, ".git")) ? nested : workspace;
+}
+
+/** Workspace location and git identity for a Ticket. Missing workspaces or non-git directories yield nulls. */
+export function workspaceDetails(workspaceRoot: string, ticketId: string): WorkspaceDetails {
+  const workspace = join(workspaceRoot, ticketId);
+  if (!existsSync(workspace)) return { workspace, branch: null, commit: null };
+  const checkout = gitCheckout(workspace);
+  return {
+    workspace,
+    branch: gitValue(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]),
+    commit: gitValue(checkout, ["rev-parse", "HEAD"]),
+  };
+}
+
 export function taskView(input: {
   task: TaskRecord;
   tickets: TicketRecord[];
+  workspaceRoot?: string;
 }): TaskView {
   return {
     task_id: input.task.task_id,
@@ -216,11 +257,13 @@ export function taskView(input: {
     prompt: input.task.prompt,
     created_at: input.task.created_at,
     updated_at: input.task.updated_at,
-    tickets: input.tickets.map(ticketSummary),
+    tickets: input.tickets.map((ticket) => ticketSummary(ticket, input.workspaceRoot)),
   };
 }
 
-export function ticketSummary(ticket: TicketRecord): TicketSummary {
+export function ticketSummary(ticket: TicketRecord, workspaceRoot?: string): TicketSummary {
+  const workspace = workspaceRoot ? join(workspaceRoot, ticket.ticket_id) : null;
+  const git = workspaceRoot && isTerminalTicket(ticket.status) ? workspaceDetails(workspaceRoot, ticket.ticket_id) : null;
   return {
     ticket_id: ticket.ticket_id,
     title: ticket.title,
@@ -231,11 +274,15 @@ export function ticketSummary(ticket: TicketRecord): TicketSummary {
     error: ticket.error,
     outcome: ticket.outcome,
     no_op: ticket.no_op,
+    workspace,
+    branch: git?.branch ?? null,
+    commit: git?.commit ?? null,
   };
 }
 
-export function ticketResult(ticket: TicketRecord, maxChars = 20000): TicketResult {
+export function ticketResult(ticket: TicketRecord, maxChars = 20000, workspaceRoot?: string): TicketResult {
   const result = ticket.result === null ? null : ticket.result.slice(0, maxChars);
+  const workspace = workspaceRoot ? workspaceDetails(workspaceRoot, ticket.ticket_id) : null;
   return {
     ticket_id: ticket.ticket_id,
     status: ticket.status,
@@ -247,5 +294,8 @@ export function ticketResult(ticket: TicketRecord, maxChars = 20000): TicketResu
     session_ref: ticket.session_ref,
     outcome: ticket.outcome,
     no_op: ticket.no_op,
+    workspace: workspace?.workspace ?? null,
+    branch: workspace?.branch ?? null,
+    commit: workspace?.commit ?? null,
   };
 }

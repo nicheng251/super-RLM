@@ -1,7 +1,14 @@
 # Project model registry.
 #
+# `default` selects the provider/model the CLI starts Router and Worker with.
+# SUPER_RLM_PRIME_PROVIDER / SUPER_RLM_PRIME_MODEL override it.
+#
 # The API key is referenced, never committed. Put DEEPSEEK_API_KEY in
 # <SUPER_RLM_HOME>/secrets/providers.env or the process environment.
+
+default:
+  provider: deepseek
+  model: deepseek-flash
 
 providers:
   deepseek:

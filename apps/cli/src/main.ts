@@ -1,5 +1,6 @@
 
 import { loadConfig, type RouterOptions } from "./config.ts";
+import { runArtifacts } from "./commands/artifacts.ts";
 import { runBackup, runRestore } from "./commands/backup.ts";
 import { runBootstrap } from "./commands/bootstrap.ts";
 import { runDev } from "./commands/dev.ts";
@@ -20,6 +21,8 @@ Usage:
   super-rlm down                 Stop background Orchestrator and Worker
   super-rlm status               Show background service health and PIDs
   super-rlm dev                  Start Orchestrator and Worker in the foreground
+  super-rlm artifacts <ticket_id> [--to <destination-dir>] [--all]
+                                 Copy Ticket artifacts (or the whole workspace)
   super-rlm backup <destination-dir> [--include-secrets]
                                  Offline backup of the project runtime
   super-rlm restore <backup-dir>
@@ -112,6 +115,24 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  if (command === "artifacts") {
+    let ticketId: string | undefined;
+    let to: string | undefined;
+    let all = false;
+    for (let index = 1; index < rest.length; index += 1) {
+      const arg = rest[index];
+      if (arg === "--all") {
+        all = true;
+      } else if (arg === "--to") {
+        to = rest[++index];
+      } else if (arg.startsWith("--to=")) {
+        to = arg.slice("--to=".length);
+      } else if (!arg.startsWith("-")) {
+        ticketId = arg;
+      }
+    }
+    return runArtifacts(loadConfig(), ticketId, { to, all });
+  }
   if (command === "backup") {
     const args = rest.slice(1);
     const includeSecrets = args.includes("--include-secrets");

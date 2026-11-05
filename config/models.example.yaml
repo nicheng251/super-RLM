@@ -1,8 +1,14 @@
 # super-RLM model providers.
 #
 # Copy to config/models.yaml and replace the provider with your endpoint.
+# `default` selects the provider/model the CLI starts Router and Worker with;
+# SUPER_RLM_PRIME_PROVIDER / SUPER_RLM_PRIME_MODEL override it.
 # `apiKey: $ENV_NAME` resolves from the process environment or
 # <SUPER_RLM_HOME>/secrets/providers.env. Never commit real keys.
+
+default:
+  provider: local
+  model: local-model
 
 providers:
   local:

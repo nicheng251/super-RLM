@@ -142,6 +142,9 @@ export interface TicketSummary {
   error?: ErrorObject | null;
   outcome?: string | null;
   no_op?: boolean | null;
+  workspace?: string | null;
+  branch?: string | null;
+  commit?: string | null;
 }
 
 export interface TicketResult {
@@ -155,6 +158,9 @@ export interface TicketResult {
   session_ref?: string | null;
   outcome?: string | null;
   no_op?: boolean | null;
+  workspace?: string | null;
+  branch?: string | null;
+  commit?: string | null;
 }
 
 export interface TaskView {

@@ -3,11 +3,13 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "yaml";
 
 export interface CliConfig {
   repoRoot: string;
   projectId: string;
   home: string;
+  workspaceRoot: string;
   port: number;
   workerPort: number;
   orchestratorUrl: string;
@@ -35,6 +37,29 @@ export function findRepoRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 }
 
+export interface ModelDefault {
+  provider: string;
+  model: string;
+}
+
+/** Reads the CLI-only `default` section from a models config. A missing, unreadable, or malformed file yields null. */
+export function readModelDefault(path: string): ModelDefault | null {
+  if (!existsSync(path)) return null;
+  let parsed: unknown;
+  try {
+    parsed = parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const section = (parsed as { default?: unknown }).default;
+  if (!section || typeof section !== "object") return null;
+  const provider = (section as { provider?: unknown }).provider;
+  const model = (section as { model?: unknown }).model;
+  if (typeof provider !== "string" || !provider || typeof model !== "string" || !model) return null;
+  return { provider, model };
+}
+
 export function readProjectId(cwd = process.cwd(), env = process.env): string {
   if (env.SUPER_RLM_PROJECT_ID) return env.SUPER_RLM_PROJECT_ID;
   const marker = join(cwd, ".super-rlm-project.json");
@@ -49,12 +74,21 @@ export function readProjectId(cwd = process.cwd(), env = process.env): string {
   return "default";
 }
 
-export function loadConfig(options: { cwd?: string; env?: NodeJS.ProcessEnv; projectId?: string; home?: string } = {}): CliConfig {
+export function loadConfig(options: {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  projectId?: string;
+  home?: string;
+  modelsConfigPath?: string;
+} = {}): CliConfig {
   const env = options.env ?? process.env;
   const cwd = options.cwd ?? process.cwd();
   const repoRoot = findRepoRoot();
+  const modelsConfigPath = options.modelsConfigPath ?? env.SUPER_RLM_MODELS_CONFIG ?? join(repoRoot, "config", "models.yaml");
+  const modelDefault = readModelDefault(modelsConfigPath);
   const projectId = options.projectId ?? readProjectId(cwd, env);
   const home = options.home ?? env.SUPER_RLM_HOME ?? join(homedir(), ".super-rlm", "projects", projectId);
+  const workspaceRoot = env.SUPER_RLM_WORKSPACES ?? join(home, "workspaces");
   const port = Number(env.SUPER_RLM_PORT ?? "8787");
   const workerPort = Number(env.SUPER_RLM_WORKER_PORT ?? "8080");
   const kernelVenv = env.SUPER_RLM_KERNEL_VENV ?? join(home, "prime", "kernel-venv");
@@ -68,6 +102,7 @@ export function loadConfig(options: { cwd?: string; env?: NodeJS.ProcessEnv; pro
     repoRoot,
     projectId,
     home,
+    workspaceRoot,
     port,
     workerPort,
     orchestratorUrl: env.SUPER_RLM_ORCHESTRATOR_URL ?? `http://127.0.0.1:${port}`,
@@ -85,8 +120,8 @@ export function loadConfig(options: { cwd?: string; env?: NodeJS.ProcessEnv; pro
     kernelPython,
     reportSkill: join(repoRoot, "apps", "worker", "skills", "super-rlm-report"),
     workerPrompt: join(repoRoot, "apps", "worker", "prompts", "worker.md"),
-    primeProvider: env.SUPER_RLM_PRIME_PROVIDER ?? "fake",
-    primeModel: env.SUPER_RLM_PRIME_MODEL ?? "fake-1",
+    primeProvider: env.SUPER_RLM_PRIME_PROVIDER ?? modelDefault?.provider ?? "fake",
+    primeModel: env.SUPER_RLM_PRIME_MODEL ?? modelDefault?.model ?? "fake-1",
     bashShell,
     maxConcurrency: Number(env.SUPER_RLM_MAX_CONCURRENCY ?? "2"),
   };
@@ -100,7 +135,7 @@ export function ensureDirs(config: CliConfig): void {
     join(config.home, "prime", "sessions"),
     join(config.home, "prime", "daemon"),
     join(config.home, "orchestrator"),
-    join(config.home, "workspaces"),
+    config.workspaceRoot,
   ];
   for (const dir of dirs) {
     mkdirSync(dir, { recursive: true });
@@ -153,6 +188,7 @@ export function orchestratorEnv(config: CliConfig): NodeJS.ProcessEnv {
   return {
     ...process.env,
     SUPER_RLM_HOME: config.home,
+    SUPER_RLM_WORKSPACES: config.workspaceRoot,
     SUPER_RLM_PORT: String(config.port),
     SUPER_RLM_ROUTER_TOKEN: config.routerToken,
     SUPER_RLM_WORKER_TOKEN: config.workerToken,
@@ -165,6 +201,7 @@ export function workerEnv(config: CliConfig): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     SUPER_RLM_HOME: config.home,
+    SUPER_RLM_WORKSPACES: config.workspaceRoot,
     SUPER_RLM_ORCHESTRATOR_URL: config.orchestratorUrl,
     SUPER_RLM_WORKER_PORT: String(config.workerPort),
     SUPER_RLM_WORKER_TOKEN: config.workerToken,

@@ -1,5 +1,9 @@
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -7,8 +11,10 @@ import {
   deriveTaskStatus,
   isTerminalTicket,
   reportOutcome,
+  ticketResult,
+  workspaceDetails,
 } from "../src/domain.ts";
-import type { SlotCounts, SlotPolicy, TicketStatus } from "../src/domain.ts";
+import type { SlotCounts, SlotPolicy, TicketRecord, TicketStatus } from "../src/domain.ts";
 
 function tickets(...statuses: TicketStatus[]) {
   return statuses.map((status) => ({ status }));
@@ -64,4 +70,82 @@ test("the priority slot is reserved but never doubled", () => {
   assert.equal(canStart("priority", counts({ totalRunning: 3, normalRunning: 3 }), policy, 0, 4), true);
   assert.equal(canStart("priority", counts({ totalRunning: 3, normalRunning: 3, priorityRunning: 1 }), policy, 0, 4), false);
   assert.equal(canStart("priority", counts({ totalRunning: 4, normalRunning: 3, priorityRunning: 1 }), policy, 0, 4), false);
+});
+
+function ticketRecord(ticketId: string): TicketRecord {
+  return {
+    ticket_id: ticketId,
+    task_id: "tsk_1",
+    title: "ticket",
+    prompt: "do it",
+    profile: "default",
+    status: "succeeded",
+    summary: "done",
+    result: "ok",
+    artifacts: [],
+    usage: null,
+    error: null,
+    question: null,
+    session_key: ticketId,
+    session_ref: null,
+    outcome: null,
+    no_op: null,
+    retry_count: 0,
+    not_before: null,
+    priority_next: false,
+    resume_message: null,
+    created_at: "2026-11-05T00:00:00Z",
+    updated_at: "2026-11-05T00:00:01Z",
+  };
+}
+
+test("ticket results expose the workspace under the configured root", () => {
+  const root = mkdtempSync(join(tmpdir(), "super-rlm-workspaces-"));
+  const result = ticketResult(ticketRecord("tkt_missing"), 20_000, root);
+  assert.equal(result.workspace, join(root, "tkt_missing"));
+  assert.equal(result.branch, null);
+  assert.equal(result.commit, null);
+});
+
+test("workspace details read the git branch and commit", () => {
+  const root = mkdtempSync(join(tmpdir(), "super-rlm-workspaces-"));
+  const workspace = join(root, "tkt_git");
+  mkdirSync(workspace);
+  execFileSync("git", ["-c", "core.autocrlf=false", "init", "-q"], { cwd: workspace });
+  writeFileSync(join(workspace, "README.md"), "# Ticket\n");
+  execFileSync("git", ["-c", "core.autocrlf=false", "add", "README.md"], { cwd: workspace });
+  execFileSync("git", [
+    "-c", "core.autocrlf=false",
+    "-c", "user.name=super-rlm",
+    "-c", "user.email=super-rlm@example.invalid",
+    "commit", "-q", "-m", "ticket output",
+  ], { cwd: workspace });
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: workspace, encoding: "utf8" }).trim();
+
+  const details = workspaceDetails(root, "tkt_git");
+  assert.equal(details.workspace, workspace);
+  assert.equal(details.commit, commit);
+  assert.ok(details.branch);
+});
+
+test("workspace details prefer a prepared repo checkout", () => {
+  const root = mkdtempSync(join(tmpdir(), "super-rlm-workspaces-"));
+  const workspace = join(root, "tkt_repo");
+  const checkout = join(workspace, "repo");
+  mkdirSync(checkout, { recursive: true });
+  execFileSync("git", ["-c", "core.autocrlf=false", "init", "-q"], { cwd: checkout });
+  writeFileSync(join(checkout, "README.md"), "# Ticket\n");
+  execFileSync("git", ["-c", "core.autocrlf=false", "add", "README.md"], { cwd: checkout });
+  execFileSync("git", [
+    "-c", "core.autocrlf=false",
+    "-c", "user.name=super-rlm",
+    "-c", "user.email=super-rlm@example.invalid",
+    "commit", "-q", "-m", "ticket output",
+  ], { cwd: checkout });
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: checkout, encoding: "utf8" }).trim();
+
+  const details = workspaceDetails(root, "tkt_repo");
+  assert.equal(details.workspace, workspace);
+  assert.equal(details.commit, commit);
+  assert.ok(details.branch);
 });

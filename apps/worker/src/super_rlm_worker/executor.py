@@ -16,6 +16,7 @@ from super_rlm_protocol import ExecutionRequest, ReportAck, ReportState, SkillRe
 
 from . import acp_client
 from .config import WorkerConfig
+from .prepare import PrepareError, prepare_workspace
 from .prime_agent import discover_session_ref, session_dir_for
 from .reports import ReportForwarder, TERMINAL_STATES, build_worker_report
 
@@ -160,6 +161,26 @@ class ExecutionManager:
     async def _run(self, state: ExecutionState) -> None:
         self._running += 1
         try:
+            try:
+                await prepare_workspace(
+                    self.config,
+                    state.workspace,
+                    state.ticket_id,
+                    state.assignment_id,
+                )
+            except PrepareError as exc:
+                state.error = str(exc)
+                LOG.error("execution %s workspace preparation failed: %s", state.assignment_id, exc)
+                await self._report_terminal(
+                    state,
+                    SkillReport(
+                        state=ReportState.FAILED,
+                        summary=f"Workspace preparation failed for ticket {state.ticket_id}",
+                        error={"code": "prepare_failed", "message": str(exc)},
+                    ),
+                )
+                return
+
             async with acp_client.open_prime_agent(
                 self.config,
                 state.workspace,

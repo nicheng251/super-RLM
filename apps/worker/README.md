@@ -47,17 +47,45 @@ resume.
 ## Execution lifecycle
 
 1. Create a per-Ticket workspace and session directory.
-2. Spawn `prime-agent --mode acp` with project-owned paths and the report skill.
-3. `initialize` -> `session/new` -> `session/prompt`.
-4. Record the durable `session_ref` from the session file.
-5. The report skill posts `progress` / `waiting` / `blocked` / `completed` /
+2. Run the one-time workspace preparation command, if configured.
+3. Spawn `prime-agent --mode acp` with project-owned paths and the report skill.
+4. `initialize` -> `session/new` -> `session/prompt`.
+5. Record the durable `session_ref` from the session file.
+6. The report skill posts `progress` / `waiting` / `blocked` / `completed` /
    `dropped` / `failed` / `cancelled` to the Worker.
-6. The Worker forwards a `WorkerReport` with a monotonic `seq`, idempotency key,
+7. The Worker forwards a `WorkerReport` with a monotonic `seq`, idempotency key,
    and HMAC-SHA256 signature over `timestamp + nonce + raw body`.
-7. A turn without a terminal report gets one enforcement prompt; still missing
+8. A turn without a terminal report gets one enforcement prompt; still missing
    becomes `failed / missing_report`.
-8. The Worker sends assignment heartbeats with the current phase.
-8. `waiting` / `blocked` close ACP but keep the session file for `--resume`.
+9. The Worker sends assignment heartbeats with the current phase.
+10. `waiting` / `blocked` close ACP but keep the session file for `--resume`.
+
+## Workspace preparation
+
+Set `SUPER_RLM_PROJECT_REPO` to an existing checkout and
+`SUPER_RLM_PREPARE_COMMAND` to a shell command. The Worker runs that command
+once per Ticket, with the Ticket workspace as the working directory, before it
+starts Prime Agent. This lets a Ticket work in a real repository instead of an
+empty workspace.
+
+The command runs through `SUPER_RLM_BASH_SHELL` with `-lc` on POSIX. On
+Windows the Worker uses `bash.exe -lc`; `sh -c` is used only when no bash is
+configured. The command inherits the Worker environment plus
+`SUPER_RLM_HOME`, `SUPER_RLM_TICKET_ID`, `SUPER_RLM_ASSIGNMENT_ID`,
+`SUPER_RLM_WORKSPACE`, `SUPER_RLM_PROJECT_REPO`, and
+`SUPER_RLM_PREPARE_COMMAND`.
+
+Example: create a per-Ticket git worktree inside the workspace. Use `./repo` in Git Bash; `$SUPER_RLM_PROJECT_REPO` should be a path Git for Windows understands, preferably `C:/...`.
+
+```bash
+git -C "$SUPER_RLM_PROJECT_REPO" worktree add ./repo -b "agent/$SUPER_RLM_TICKET_ID" main
+```
+
+On success the Worker writes `<workspace>/.super-rlm-prepared` with JSON
+`{ticket_id, prepared_at, command}`. The marker makes preparation idempotent:
+resume, retry, and reassignment skip it. Delete the marker to run the command
+again. A nonzero exit or a timeout fails the Ticket with error code
+`prepare_failed`, and Prime Agent is never started.
 
 ## Configuration
 
@@ -75,7 +103,10 @@ resume.
 | `SUPER_RLM_PRIME_MODEL` | `fake-1` | Model id. |
 | `SUPER_RLM_KERNEL_VENV` | `<home>/prime/kernel-venv` | Project kernel venv. |
 | `SUPER_RLM_KERNEL_PYTHON` | venv python | Python inside the kernel venv. |
-| `SUPER_RLM_BASH_SHELL` | Git Bash on Windows | POSIX shell for Prime Agent bash. |
+| `SUPER_RLM_BASH_SHELL` | Git Bash on Windows | POSIX shell for Prime Agent bash and workspace preparation. |
+| `SUPER_RLM_PROJECT_REPO` | unset | Source checkout used by workspace preparation. |
+| `SUPER_RLM_PREPARE_COMMAND` | unset | One-time workspace preparation command. |
+| `SUPER_RLM_PREPARE_TIMEOUT_S` | `600` | Workspace preparation timeout. |
 | `SUPER_RLM_REPORT_SKILL` | repo skill dir | `super-rlm-report` skill path. |
 | `SUPER_RLM_WORKER_PROMPT` | repo prompt | Appended Worker system prompt. |
 | `SUPER_RLM_TURN_TIMEOUT_S` | `3600` | Per-ACP-turn timeout. |
@@ -95,5 +126,5 @@ kernel venv is missing.
 ## Deferred
 
 - Per-Worker control tokens and scoped bearer tokens.
-- Per-profile `prepare_command` / `blocked_commands`.
+- Per-profile `blocked_commands` and preparation overrides.
 - Hardened container isolation.

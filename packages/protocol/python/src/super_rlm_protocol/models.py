@@ -142,6 +142,9 @@ class TicketSummary(BaseModel):
     error: ErrorObject | None = None
     outcome: str | None = None
     no_op: bool | None = None
+    workspace: str | None = None
+    branch: str | None = None
+    commit: str | None = None
 
 
 class TicketResult(BaseModel):
@@ -157,6 +160,9 @@ class TicketResult(BaseModel):
     session_ref: str | None = None
     outcome: str | None = None
     no_op: bool | None = None
+    workspace: str | None = None
+    branch: str | None = None
+    commit: str | None = None
 
 
 class TaskView(BaseModel):

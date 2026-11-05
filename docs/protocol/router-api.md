@@ -161,7 +161,10 @@ Response:
         "text": "Linux or Windows?",
         "asked_at": "2026-11-02T12:01:00Z"
       },
-      "error": null
+      "error": null,
+      "workspace": "/data/workspaces/tkt_...",
+      "branch": "agent/tkt_...",
+      "commit": "abc123"
     }
   ]
 }
@@ -202,15 +205,20 @@ Response:
   "summary": "short summary",
   "result": "full result text",
   "artifacts": [
-    { "type": "file", "path": "/data/workspaces/tkt_.../out.md" }
+    { "type": "file", "path": "out.md" }
   ],
   "usage": { "tokens": 1234 },
   "error": null,
-  "session_ref": "prime-session-..."
+  "session_ref": "prime-session-...",
+  "workspace": "/data/workspaces/tkt_...",
+  "branch": "agent/tkt_...",
+  "commit": "abc123"
 }
 ```
 
 `max_chars` bounds the returned `result`; the full result remains in Orchestrator storage.
+`workspace` is the runtime workspace path. `branch` and `commit` are read from
+the workspace git checkout and are `null` when it is not a git repository.
 
 ## 8. ticket_answer
 

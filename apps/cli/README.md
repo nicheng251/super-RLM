@@ -17,6 +17,7 @@ super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
 super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
 super-rlm models sync     # write project Pi/Prime models.json from config/models.yaml
+super-rlm artifacts <ticket_id> [--to <dir>] [--all]  # copy Ticket artifacts
 super-rlm backup <dir>    # offline backup of SUPER_RLM_HOME
 super-rlm restore <dir>   # restore an offline backup
 super-rlm config          # print resolved paths and tokens
@@ -73,6 +74,28 @@ writes the resolved provider config to:
 `apiKey: $NAME` resolves from the process environment or
 `<home>/secrets/providers.env`. A missing secret fails the sync. Use
 `config/models.example.yaml` as the template for a real endpoint.
+
+## Artifact copy-out
+
+Ticket files stay in the runtime workspace. Read a Ticket's reported artifacts
+and copy them with:
+
+```bash
+super-rlm artifacts tkt_...
+super-rlm artifacts tkt_... --to C:/temp
+super-rlm artifacts tkt_... --all --to C:/temp
+```
+
+Without `--to`, the destination is the current directory. By default the
+command copies each artifact returned by `ticket_result` to
+`<destination>/<artifact.path>`. `--all` copies the entire
+`<workspaceRoot>/<ticket_id>` directory to `<destination>/<ticket_id>`; it omits
+`.super-rlm-report.json`, `.super-rlm-prepared`, and `.git`.
+
+The workspace root is `SUPER_RLM_WORKSPACES` when set, otherwise
+`<home>/workspaces`. Artifact paths must stay inside the workspace; parents and
+absolute paths are rejected. The command prints the git branch and commit when
+the workspace is a checkout.
 
 ## Backup and restore
 
@@ -147,6 +170,7 @@ No built-in tools are registered. The extension is the only tool source.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SUPER_RLM_HOME` | `~/.super-rlm/projects/<project_id>` | Project runtime root. |
+| `SUPER_RLM_WORKSPACES` | `<home>/workspaces` | Ticket workspace root. |
 | `SUPER_RLM_PROJECT_ID` | marker or `default` | Project identity. |
 | `SUPER_RLM_PORT` | `8787` | Orchestrator port. |
 | `SUPER_RLM_WORKER_PORT` | `8080` | Worker port. |

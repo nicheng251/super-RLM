@@ -244,7 +244,7 @@ export class Orchestrator {
 
   getTask(taskId: string): TaskView {
     const { task, tickets } = this.refreshTask(taskId);
-    return taskView({ task, tickets });
+    return taskView({ task, tickets, workspaceRoot: this.config.workspaceRoot });
   }
 
   listTasks(query: { status?: string; limit?: number } = {}): TaskListItem[] {
@@ -275,7 +275,7 @@ export class Orchestrator {
   getTicketResult(ticketId: string, maxChars = 20_000): TicketResult {
     const ticket = this.store.getTicket(ticketId);
     if (!ticket) throw new OrchestratorError("ticket_not_found", `no such ticket: ${ticketId}`);
-    return ticketResult(ticket, maxChars);
+    return ticketResult(ticket, maxChars, this.config.workspaceRoot);
   }
 
   async answerTicket(ticketId: string, message: string): Promise<TicketActionResult> {

@@ -44,6 +44,9 @@ class WorkerConfig:
     kernel_venv: Path
     kernel_python: Path
     bash_shell: str | None
+    prepare_command: str | None
+    prepare_timeout_s: float
+    project_repo: str | None
     report_skill: Path
     worker_prompt: Path
     workspace_root: Path
@@ -83,6 +86,9 @@ class WorkerConfig:
             kernel_venv=kernel_venv,
             kernel_python=Path(kernel_python),
             bash_shell=source.get("SUPER_RLM_BASH_SHELL") or _default_bash_shell(),
+            prepare_command=source.get("SUPER_RLM_PREPARE_COMMAND") or None,
+            prepare_timeout_s=float(source.get("SUPER_RLM_PREPARE_TIMEOUT_S", "600")),
+            project_repo=source.get("SUPER_RLM_PROJECT_REPO") or None,
             report_skill=Path(source.get("SUPER_RLM_REPORT_SKILL", _repo_root() / "apps" / "worker" / "skills" / "super-rlm-report")),
             worker_prompt=Path(source.get("SUPER_RLM_WORKER_PROMPT", _repo_root() / "apps" / "worker" / "prompts" / "worker.md")),
             workspace_root=Path(source.get("SUPER_RLM_WORKSPACES", home / "workspaces")),

@@ -1,7 +1,7 @@
 # super-RLM Handoff
 
-Status: architecture decision design complete; both local spikes passed; core vertical slice works end-to-end. HEAD `9cc3edf` pushed to origin/main.  
-Last updated: 2026-11-03
+Status: core vertical slice, CLI, L2 TUI, backup/restore, workspace preparation, artifact copy-out, and real-model regression all work. HEAD 以 `git log` 为准。
+Last updated: 2026-11-05
 
 ## 1. 项目一句话
 
@@ -15,7 +15,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 
 ## 2. 当前状态
 
-- 仓库有文档、ADR、两个已通过的本地 spike，以及可运行的核心垂直切片；`super-rlm` CLI 和 L2 页面尚未开始。
+- 仓库有文档、ADR、两个已通过的本地 spike，以及可运行的核心垂直切片；`super-rlm` CLI、L2 页面、backup/restore 和真实模型回归已完成。
 - 46 个 ADR 已记录：44 accepted，2 superseded。
 - 架构、状态机、Router API、Worker API、审计和 spike 计划已写入 docs。
 - 项目本地运行时已建立：
@@ -25,27 +25,31 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
   - `docs/spikes/pi-router.md`：Router 现在暴露 11 个控制面工具 + SSE 通知；伪 `bash` 调用被拒绝。
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；16 个 Python 测试通过，`tsc --noEmit` 通过。
-- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v2）；21 个 `node:test` 测试通过。
-- `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；10 个 pytest 通过（含真实 Prime Agent ACP 集成测试）。
-- `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore` 可用；12 个 `node:test` 通过；`up/status/down` 已手动验证。
-- 当前单元/集成测试合计 61 个：protocol 16、orchestrator 21、worker 10、cli 12、router 2。
+- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v2）；24 个 `node:test` 测试通过。
+- `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；16 个 pytest 通过（含真实 Prime Agent ACP 集成测试和 workspace prepare 测试）。
+- `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts` 可用；23 个 `node:test` 通过；`up/status/down` 已手动验证。
+- 当前单元/集成测试合计 81 个：protocol 16、orchestrator 24、worker 16、cli 23、router 2。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
 - 已用真实 DeepSeek `deepseek-flash` 跑通：写文件任务成功（`hello.txt` 内容正确），以及 TUI 中 `/tasks` -> Task Detail -> 回答 -> resume -> succeeded。
 - 已实现离线 backup/restore：manifest + SHA256、secrets 默认排除、服务未停止拒绝、schema 版本检查、原子恢复；4 个 CLI 测试通过。
 - 已实现真实模型回归脚本 `scripts/regression/real_model.py`；`report`、`file`、`hitl` 三个 DeepSeek 用例全部通过（run `20261104T092740Z_5348`）。
+- 已实现 workspace preparation：`SUPER_RLM_PREPARE_COMMAND` + `SUPER_RLM_PROJECT_REPO`，Worker 在启动 Prime Agent 前执行一次，支持 git worktree、超时、失败报告 `.super-rlm-prepared` 幂等标记。
+- 已实现 `super-rlm artifacts <ticket_id>`：从 Ticket workspace 复制 artifacts 或整个 workspace；workspace/branch/commit 已写入 Ticket result 和 TUI Task Detail。
+- 默认 provider/model 从 `config/models.yaml` 的 `default` 读取，环境变量仍优先；`models sync` 只把 `providers` 写入 Pi/Prime models.json。
+- 已用真实 DeepSeek 跑通 prepare + git worktree + artifacts copy-out：Task `tsk_19178d670a9f41759178` succeeded，workspace branch/commit 正确，artifact 复制成功（`docs/spikes/prepare-artifacts-e2e.md`）。
 - 发现并修复 resident kernel 环境过期问题：Worker 在每个 workspace 写 `.super-rlm-report.json`，skill 通过 `SUPER_RLM_REPORT_CONFIG` 每次读取当前 assignment 的 report URL/token。
-- 下一阶段是 per-profile 命令、Worker 容器隔离、Orchestrator 完整 outbox/user callback HMAC；发行、安装器、打包暂不做。
+- 下一阶段是 per-profile 命令、Worker 容器隔离、Orchestrator 完整 outbox/user callback HMAC、L3 TUI；发行、安装器、打包暂不做。
 
 当前实现缺口：
 
 - Orchestrator 还缺完整 outbox 和用户 callback 的 HMAC。
-- Worker 还缺 per-Worker control token、profile prepare/blocked commands、容器隔离。
+- Worker 已有全局 prepare command；还缺 per-profile prepare/blocked commands、per-Worker control token、容器隔离。
 - 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
 - HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
 - Router 默认异步调度：`task_create` 后立即返回，由 SSE 通知 Task 终态；`task_wait` 只用于用户显式要求等待，默认 15 秒、最大 60 秒，避免阻塞 TUI。
-- backup/restore 已实现；SQLite 当前 schema v2。
+- backup/restore 已实现；SQLite 当前 schema v2。migration 前自动备份仍未实现。
 - 真实模型回归是手动脚本，不进入普通 CI，避免产生 API 费用。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；`super-rlm bootstrap` 已覆盖 kernel venv 和 report skill，但 Pi package 仍需首次 npm install。
 - Baseline 已提交；当前 HEAD 以 `git log` 为准，工作树保持 clean。
@@ -62,6 +66,7 @@ apps/worker/skills/super-rlm-report/        # Python report skill
 packages/protocol/                          # v0 JSON Schema + Python/TS types
 spikes/                                     # fake LLM、mock Orchestrator、ACP probes
 scripts/regression/                         # 真实 DeepSeek 手动回归 harness
+docs/guides/developing-with-super-rlm.md      # 用真实项目开发的工作流
 runtime/manifest.json                       # Pi 1.5.0 / Prime 0.10.2；Node 为宿主机依赖
 runtime/pi/                                 # 本地 Pi package（node_modules ignored）
 runtime/prime-agent/                        # 本地 Prime binary/runtime（ignored）
@@ -105,6 +110,8 @@ remote: https://github.com/nicheng251/super-RLM.git
 14. `docs/spikes/tui-pages.md`（L2 TUI 验证）
 15. `scripts/regression/README.md`（真实模型回归）
 16. `docs/spikes/real-model-regression.md`（真实模型回归结果）
+17. `docs/guides/developing-with-super-rlm.md`（真实项目开发工作流）
+18. `docs/spikes/prepare-artifacts-e2e.md`（prepare/artifacts E2E）
 
 ## 4. 架构总览
 

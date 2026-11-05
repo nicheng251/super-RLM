@@ -64,7 +64,9 @@ export function syncModels(config: CliConfig, options: { configPath?: string; dr
   const secrets = readSecrets(config);
   let resolved: ModelsConfig;
   try {
-    resolved = resolveSecrets(models, options.env ?? process.env, secrets) as ModelsConfig;
+    // models.json is consumed by Pi/Prime, which only understand `providers`.
+    // The CLI-only `default` section stays in config/models.yaml.
+    resolved = { providers: resolveSecrets(models.providers, options.env ?? process.env, secrets) as ModelsConfig["providers"] };
   } catch (error) {
     console.error(`[models] ${error instanceof Error ? error.message : String(error)}`);
     return 1;
