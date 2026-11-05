@@ -2,6 +2,7 @@ import {
   Key,
   matchesKey,
   truncateToWidth,
+  visibleWidth,
   type Component,
   type Focusable,
 } from "@earendil-works/pi-tui";
@@ -174,9 +175,9 @@ export class ModelSelector implements Component, Focusable {
     for (let index = 0; index < this.profiles.length; index += 1) {
       const profile = this.profiles[index];
       const marker = index === this.selectedProfile ? cyan("▸") : " ";
-      const label = `${marker} ${profile.label}`;
+      const label = `${marker} ${padVisible(profile.label, 16)}`;
       const detail = `${profile.provider}/${profile.model}  thinking:${profile.thinking}  ctx:${profile.contextWindow ? formatTokens(profile.contextWindow) : "?"}`;
-      const row = `${label.padEnd(20)}  ${detail}`;
+      const row = `${label}  ${detail}`;
       lines.push(index === this.selectedProfile ? inverse(truncateToWidth(row, width)) : truncateToWidth(row, width));
     }
     if (this.profiles.length === 0) lines.push(dim("No profiles available."));
@@ -220,6 +221,11 @@ export class ModelSelector implements Component, Focusable {
   }
 
   invalidate(): void {}
+}
+
+function padVisible(text: string, width: number): string {
+  const visible = visibleWidth(text);
+  return visible >= width ? truncateToWidth(text, width) : `${text}${" ".repeat(width - visible)}`;
 }
 
 function wrapIndex(index: number, count: number): number {
