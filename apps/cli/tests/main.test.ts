@@ -33,6 +33,10 @@ test("retired background and standalone Router commands are rejected", () => {
 
 test("maintenance commands keep their arguments", () => {
   assert.deepEqual(parseCommand(["status"]), { command: "status", rest: [] });
+  assert.deepEqual(parseCommand(["setup", "--provider", "local", "--allow-missing-key"]), {
+    command: "setup",
+    rest: ["--provider", "local", "--allow-missing-key"],
+  });
   assert.deepEqual(parseCommand(["down"]), { command: "down", rest: [] });
   assert.deepEqual(parseCommand(["artifacts", "tkt_1", "--all"]), {
     command: "artifacts",
@@ -51,6 +55,7 @@ test("help no longer lists background services or the standalone Router", () => 
   assert.equal(response.status, 0);
   assert.match(response.stdout, /super-rlm tui\s+Alias/);
   assert.match(response.stdout, /super-rlm down/);
+  assert.match(response.stdout, /super-rlm setup \[--provider <name>\]/);
   assert.doesNotMatch(response.stdout, /super-rlm up\b/);
   assert.doesNotMatch(response.stdout, /super-rlm dev\b/);
   assert.doesNotMatch(response.stdout, /--no-services/);
@@ -90,4 +95,11 @@ test("the config command prints redacted token and key fields", () => {
   assert.equal(parsed.workerToken, "[redacted]");
   assert.equal(parsed.callbackKey, "[redacted]");
   assert.doesNotMatch(response.stdout, /[0-9a-f]{64}/);
+});
+
+test("setup rejects unknown flags before touching the project", () => {
+  const response = run(["setup", "--bogus"]);
+  assert.equal(response.status, 1);
+  assert.match(response.stderr, /super-rlm setup: unknown argument: --bogus/);
+  assert.match(response.stderr, /Usage: super-rlm setup/);
 });

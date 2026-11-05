@@ -9,8 +9,9 @@ export interface ModelsConfig {
   providers: Record<string, Record<string, unknown>>;
 }
 
-function readSecrets(config: CliConfig): Record<string, string> {
-  const path = join(config.home, "secrets", "providers.env");
+/** Parse `<home>/secrets/providers.env`; comments and malformed lines are ignored. */
+export function readProviderSecrets(home: string): Record<string, string> {
+  const path = join(home, "secrets", "providers.env");
   if (!existsSync(path)) return {};
   const result: Record<string, string> = {};
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
@@ -21,6 +22,10 @@ function readSecrets(config: CliConfig): Record<string, string> {
     result[trimmed.slice(0, index).trim()] = trimmed.slice(index + 1).trim();
   }
   return result;
+}
+
+function readSecrets(config: CliConfig): Record<string, string> {
+  return readProviderSecrets(config.home);
 }
 
 function resolveSecrets(value: unknown, env: NodeJS.ProcessEnv, secrets: Record<string, string>): unknown {

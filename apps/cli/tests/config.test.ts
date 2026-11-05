@@ -16,6 +16,7 @@ import {
   readModelDefault,
   readProjectId,
   redactConfig,
+  resolveUvPath,
   routerEnv,
   secretsFilePath,
   workerEnv,
@@ -255,4 +256,22 @@ test("unreadable or unwritable secret files degrade to ephemeral secrets", () =>
   assert.match(secrets.routerToken, /^[0-9a-f]{64}$/);
   assert.match(secrets.workerToken, /^[0-9a-f]{64}$/);
   assert.match(secrets.callbackKey, /^[0-9a-f]{64}$/);
+});
+
+test("uvPath prefers SUPER_RLM_UV, then the bundled runtime, then PATH", () => {
+  const repo = mkdtempSync(join(tmpdir(), "super-rlm-uv-"));
+  const bundled = join(repo, "runtime", "bin", "uv.exe");
+  assert.equal(
+    resolveUvPath(repo, { SUPER_RLM_UV: " C:/tools/uv.exe " }, "win32", () => true),
+    "C:/tools/uv.exe",
+  );
+  assert.equal(resolveUvPath(repo, {}, "win32", (path) => path === bundled), bundled);
+  assert.equal(resolveUvPath(repo, {}, "win32", () => false), "uv.exe");
+  assert.equal(resolveUvPath(repo, {}, "linux", () => false), "uv");
+
+  const config = loadConfig({
+    env: { SUPER_RLM_HOME: "/tmp/super-rlm-home", SUPER_RLM_UV: "C:/tools/uv.exe" },
+    cwd: tmpdir(),
+  });
+  assert.equal(config.uvPath, "C:/tools/uv.exe");
 });

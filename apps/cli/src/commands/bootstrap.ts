@@ -30,7 +30,7 @@ const DEFAULT_PACKAGES = [
 ];
 
 export function bootstrapPlan(config: CliConfig): BootstrapPlan {
-  const uv = process.platform === "win32" ? "uv.exe" : "uv";
+  const uv = config.uvPath;
   const python = config.kernelPython;
   const runtime = join(config.repoRoot, "runtime", "prime-agent", "prime-agent-runtime");
   return {
@@ -55,6 +55,16 @@ export function bootstrapPlan(config: CliConfig): BootstrapPlan {
         title: "Install super-rlm-report skill",
         command: uv,
         args: ["pip", "install", "--python", python, "-e", config.reportSkill],
+      },
+      {
+        title: `Create Worker venv at ${join(config.workerDir, ".venv")}`,
+        command: uv,
+        args: ["venv", "--python", "3.11", "--allow-existing", join(config.workerDir, ".venv")],
+      },
+      {
+        title: "Install Worker runtime",
+        command: uv,
+        args: ["pip", "install", "--python", config.workerPython, "-e", config.workerDir],
       },
     ],
   };

@@ -11,6 +11,7 @@ import { parseGcArgs, runGc } from "./commands/gc.ts";
 import { runInit } from "./commands/init.ts";
 import { syncModels } from "./commands/models.ts";
 import { runProfiles } from "./commands/profiles.ts";
+import { runSetup } from "./commands/setup.ts";
 import { runTasks } from "./commands/tasks.ts";
 import { runTui } from "./commands/tui.ts";
 import { describeLogRotation, rotateServiceLogs } from "./maintenance.ts";
@@ -58,6 +59,8 @@ Usage:
                [--workspaces] [--worktrees] [--all]
                                  Delete artifacts of finished Tickets (dry run by default)
   super-rlm doctor [--json]
+  super-rlm setup [--provider <name>] [--model <id>] [--allow-missing-key]
+                                 Prepare this project for first use (never starts the TUI)
   super-rlm init                 Create .super-rlm-project.json
   super-rlm bootstrap [--dry-run]  Prepare the project kernel venv and report skill
   super-rlm models sync [--dry-run]  Write project Pi/Prime models.json from config/models.yaml
@@ -161,6 +164,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   if (parsed.command === "down") return down();
 
   const rest = parsed.rest;
+  if (parsed.command === "setup") return runSetup(rest);
   if (parsed.command === "init") return runInit();
   if (parsed.command === "bootstrap") {
     return runBootstrap(loadConfig(), { dryRun: rest.includes("--dry-run") });

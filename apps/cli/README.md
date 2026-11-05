@@ -12,6 +12,8 @@ super-rlm down            # stop Orchestrator, Worker, and the project Prime dae
 super-rlm status          # show Orchestrator, Worker, and Prime daemon status
 super-rlm tasks           # headless task list
 super-rlm doctor          # check project runtimes and services
+super-rlm setup [--provider <name>] [--model <id>] [--allow-missing-key]
+                          # prepare a project for first use; never starts the TUI
 super-rlm init            # create .super-rlm-project.json + gitignore entry
 super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
 super-rlm models sync     # write project Pi/Prime models.json from config/models.yaml
@@ -35,10 +37,11 @@ cleanup.
 
 ```bash
 # from the target project
-super-rlm init
-super-rlm doctor
+super-rlm setup
 super-rlm
 ```
+
+`super-rlm init` and `super-rlm doctor` remain available for individual steps.
 
 Set a non-default runtime root explicitly:
 
@@ -63,15 +66,62 @@ remaining member. If the Job APIs are unavailable, startup fails closed.
 The supervisor Python defaults to the Worker venv. Override it with
 `SUPER_RLM_SUPERVISOR_PYTHON`.
 
+## First-run setup
+
+Run `super-rlm setup` from the project directory on first use:
+
+```bash
+super-rlm setup
+super-rlm setup --provider deepseek --model deepseek-flash
+super-rlm setup --allow-missing-key
+```
+
+The command:
+
+1. creates `.super-rlm-project.json` with the same logic as `super-rlm init`
+2. checks Node `>= 22.19` and that the resolved `uv` executable runs
+3. creates the project directories and API secrets through the normal config
+   loader
+4. checks the selected provider's `apiKey` reference in
+   `<home>/secrets/providers.env` (fail fast before the expensive steps)
+5. runs bootstrap (kernel venv, Prime Agent runtime, kernel defaults, report
+   skill, and the Worker venv)
+6. runs `models sync` to write the project Pi/Prime `models.json` files
+7. runs `doctor` and prints the next step
+
+`--provider` and `--model` select the provider/model for the key check without
+editing `config/models.yaml`. `--model` defaults to the registry default. The
+`apiKey: $NAME` reference in the registry determines which key is required. If
+that key is missing, setup prints the exact line to add:
+
+```text
+Add this line to <home>/secrets/providers.env:
+  DEEPSEEK_API_KEY=<your deepseek API key>
+```
+
+and exits with status 1 before running bootstrap. `--allow-missing-key`
+continues instead; add the key and run `super-rlm models sync` before starting.
+Setup never starts the TUI. After it succeeds, run `super-rlm`.
+
+`super-rlm` refuses to start when the project marker, kernel venv, report
+skill, or Pi/Prime `models.json` files are missing. It prints the missing
+resources and asks for `super-rlm setup` instead of a generic startup error.
+
 ## Bootstrap
 
-`super-rlm bootstrap` creates `<home>/prime/kernel-venv` with `uv` and installs:
+`super-rlm bootstrap` creates `<home>/prime/kernel-venv` and `apps/worker/.venv`
+with `uv` and installs:
 
 - `prime-agent-runtime` and its `mcp`/`tyro` dependencies
 - the default kernel packages (`requests`, `httpx`, `pyyaml`, `tomli`, `python-dotenv`, `pandas`, `numpy`, `scipy`, `beautifulsoup4`, `lxml`)
 - `apps/worker/skills/super-rlm-report` editable
+- the Worker runtime (`apps/worker`) with `agent-client-protocol`
 
 Use `super-rlm bootstrap --dry-run` to print the commands without running them.
+
+The `uv` executable is resolved from `SUPER_RLM_UV`, then the bundled
+`runtime/bin/uv.exe`, then `uv.exe` on `PATH`. The packaged Windows install
+ships uv in `runtime/bin`.
 ## Profiles
 
 `config/profiles.yaml` defines named Worker capability profiles. A Ticket
@@ -198,8 +248,8 @@ TUI:          node apps/tui/src/main.ts
 ```
 
 All three inherit the resolved `SUPER_RLM_*` configuration. Neither start nor
-`down` creates the project kernel venv; `super-rlm doctor` reports when it is
-missing.
+`down` creates the project kernel venv; run `super-rlm setup` first, and
+`super-rlm doctor` reports when it is missing.
 
 ## Router isolation
 
@@ -231,6 +281,7 @@ No built-in tools are registered. The extension is the only tool source.
 | `SUPER_RLM_PRIME_MODEL` | `fake-1` | Prime model id. |
 | `SUPER_RLM_KERNEL_VENV` | `<home>/prime/kernel-venv` | Prime kernel venv. |
 | `SUPER_RLM_KERNEL_PYTHON` | venv python | Prime kernel Python. |
+| `SUPER_RLM_UV` | bundled `runtime/bin/uv.exe`, then PATH | uv executable used by setup and bootstrap. |
 | `SUPER_RLM_PRIME_DAEMON` | `<home>/prime/daemon/worker.sock` | Project Prime daemon socket. |
 | `SUPER_RLM_SUPERVISOR_PYTHON` | Worker venv python | Python used for the Windows Job supervisor. |
 | `NODE_BIN` | `node` | Node executable for `bin/super-rlm`. |

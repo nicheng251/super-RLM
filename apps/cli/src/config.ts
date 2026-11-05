@@ -29,6 +29,8 @@ export interface CliConfig {
   workerPython: string;
   kernelVenv: string;
   kernelPython: string;
+  /** uv executable: SUPER_RLM_UV, the bundled runtime uv, or PATH. */
+  uvPath: string;
   reportSkill: string;
   workerPrompt: string;
   primeProvider: string;
@@ -43,6 +45,26 @@ export interface CliConfig {
 
 export function findRepoRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+}
+
+/**
+ * Resolve uv for the packaged install.
+ *
+ * Order: explicit `SUPER_RLM_UV`, then the bundled runtime (`runtime/bin`),
+ * then the PATH command name. The override is used verbatim so a user can
+ * point at any executable, including one with spaces.
+ */
+export function resolveUvPath(
+  repoRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  exists: (path: string) => boolean = existsSync,
+): string {
+  const override = env.SUPER_RLM_UV?.trim();
+  if (override) return override;
+  const bundled = join(repoRoot, "runtime", "bin", platform === "win32" ? "uv.exe" : "uv");
+  if (exists(bundled)) return bundled;
+  return platform === "win32" ? "uv.exe" : "uv";
 }
 
 /**
@@ -337,6 +359,7 @@ export function loadConfig(options: {
     workerPython: join(repoRoot, "apps", "worker", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
     kernelVenv,
     kernelPython,
+    uvPath: resolveUvPath(repoRoot, env),
     reportSkill: join(repoRoot, "apps", "worker", "skills", "super-rlm-report"),
     workerPrompt: join(repoRoot, "apps", "worker", "prompts", "worker.md"),
     primeProvider,

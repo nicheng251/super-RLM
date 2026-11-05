@@ -28,11 +28,12 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v6，迁移前自动备份）；55 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；83 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands、delivery、daemon lifecycle 和 security 测试）。
 - `apps/cli` 已实现：`super-rlm` 直接启动 L3 TUI，并在 Windows Job Object 中管理 Orchestrator、Worker、Prime daemon 的完整生命周期；`tui` 是别名；后台语义 `up/router/dev` 已删除；`down/status/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles` 保留；52 个 `node:test` 通过。
-- 当前单元/集成测试合计 299 个：protocol 28、orchestrator 67、worker 96、cli 79、router 2、tui 27。
+- 当前单元/集成测试合计 316 个：protocol 28、orchestrator 67、worker 96、cli 96、router 2、tui 27。
 - P0-A1 已实现：`super-rlm` 直接启动 TUI；Windows Job Object (`KILL_ON_JOB_CLOSE`) 包含 Orchestrator/Worker/TUI/daemon；Worker 显式启动并停止项目 daemon；Ticket cancel 使用 `prime-agent stop <session_ref stem>` 并记录 `cleanup_error`；随机 token 写入 `<home>/secrets/api.env`；Orchestrator/Worker 直接启动 fail-closed；loopback 强制；callback 基础 SSRF 防护；每 Ticket TEMP/PIP/NPM/XDG 隔离；prepare 输出 secret 脱敏。
 - 已实现 `super-rlm gc`：默认 dry-run，按 terminal Ticket/Task 清理 tmp/sessions/workspaces，worktrees 需显式 `--worktrees`，运行中服务拒绝执行，脏 worktree 跳过。
 - 已实现启动维护：TUI 启动前轮转 Orchestrator/Worker 日志（默认 10 MiB、保留 3 份）并自动执行旧资源 GC（可用 `SUPER_RLM_AUTO_MAINTENANCE=0` 关闭）；`down` 后轮转已关闭日志。
 - Task Detail 新增 `v` 只读 Ticket Session viewer：Worker `GET /v1/tickets/:id/session`、Prime JSONL 解析、j/k 滚动、r 刷新、Esc 逐级返回；L3 状态栏显示 `ctx:已用/窗口`。
+- 已实现 Windows 用户级安装器：`installer/install.ps1` + `scripts/package/windows.ps1`，版本 `0.1.0`；内置 uv、随包分发 Prime Agent、检查 Node、安装 Pi/CLI/Orchestrator/Router/TUI npm 依赖与 Worker venv、用户 PATH、升级回滚、卸载；新增 `super-rlm setup` 首次项目初始化。
 - `profiles.overrides.json` 已改为原子写、严格校验、fail-closed 启动，并支持 `super-rlm profiles reset <name>|--all`。
 - 新增 `scripts/regression/windows_lifecycle.py`：Job 优雅退出/失败/杀 supervisor/启动失败/daemon 生命周期，5 个非付费 case 通过；`--real-prime` 管理 smoke 6/6 通过。
 - L3 状态栏现在显示 `ctx:已用/窗口`（来自 Pi `getSessionStats().contextUsage`）。

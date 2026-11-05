@@ -12,9 +12,10 @@ interface Check {
   detail: string;
 }
 
-function nodeOk(): boolean {
-  const [major, minor] = process.versions.node.split(".").map(Number);
-  return major > 22 || (major === 22 && minor >= 19);
+export function nodeVersionOk(version: string = process.versions.node): boolean {
+  const [major, minor] = version.split(".").map(Number);
+  return Number.isFinite(major) && Number.isFinite(minor)
+    && (major > 22 || (major === 22 && minor >= 19));
 }
 
 async function health(url: string, token: string): Promise<{ ok: boolean; detail: string }> {
@@ -43,7 +44,7 @@ export async function runDoctor(config: CliConfig, options: { json?: boolean } =
   const daemon = await daemonState(config);
 
   const checks: Check[] = [
-    { name: "node", ok: nodeOk(), required: true, detail: process.versions.node },
+    { name: "node", ok: nodeVersionOk(), required: true, detail: process.versions.node },
     { name: "pi-cli", ok: existsSync(config.piCli), required: true, detail: config.piCli },
     { name: "router-extension", ok: existsSync(config.routerExtension), required: true, detail: config.routerExtension },
     { name: "prime-agent", ok: existsSync(config.primeAgent), required: true, detail: config.primeAgent },

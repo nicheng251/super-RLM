@@ -9,7 +9,10 @@ import { runSupervisor } from "../supervisor/run.ts";
 
 export interface RunTuiOptions {
   platform?: NodeJS.Platform;
+  cwd?: string;
   detect?: (config: CliConfig) => Promise<RunningStack>;
+  /** Test hook: return first-run setup gaps instead of reading the filesystem. */
+  setupIssues?: (config: CliConfig, cwd: string, env: NodeJS.ProcessEnv) => string[];
   maintain?: (
     config: CliConfig,
     options: StartupMaintenanceOptions,
@@ -45,6 +48,27 @@ function fail(message: string): number {
   return 1;
 }
 
+/** First-run resources that `super-rlm setup` creates for this project. */
+export function startupSetupIssues(
+  config: CliConfig,
+  cwd: string = process.cwd(),
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const issues: string[] = [];
+  if (!env.SUPER_RLM_PROJECT_ID && !existsSync(join(cwd, ".super-rlm-project.json"))) {
+    issues.push(`project marker ${join(cwd, ".super-rlm-project.json")}`);
+  }
+  if (!existsSync(config.kernelPython)) issues.push(`kernel venv ${config.kernelVenv}`);
+  if (!existsSync(config.reportSkill)) issues.push(`report skill ${config.reportSkill}`);
+  for (const path of [
+    join(config.home, "pi", "agent", "models.json"),
+    join(config.home, "prime", "agent", "models.json"),
+  ]) {
+    if (!existsSync(path)) issues.push(`models ${path}`);
+  }
+  return issues;
+}
+
 export async function runTui(config: CliConfig, options: RunTuiOptions = {}): Promise<number> {
   const entry = tuiEntry(config);
   if (!existsSync(entry)) {
@@ -64,6 +88,16 @@ export async function runTui(config: CliConfig, options: RunTuiOptions = {}): Pr
   if (hasRunningStack(stack)) {
     const detail = describeRunningStack(stack).map((line) => `  - ${line}`).join("\n");
     return fail(`refusing to start because super-RLM is already running:\n${detail}\nRun \`super-rlm down\`, then start again.`);
+  }
+
+  const setupIssues = (options.setupIssues ?? startupSetupIssues)(
+    config,
+    options.cwd ?? process.cwd(),
+    process.env,
+  );
+  if (setupIssues.length > 0) {
+    const detail = setupIssues.map((line) => `  - missing ${line}`).join("\n");
+    return fail(`first-run setup is incomplete for this project:\n${detail}\nRun \`super-rlm setup\` from this project, then start again.`);
   }
 
   if (!existsSync(config.orchestratorMain)) {

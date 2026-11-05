@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { loadConfig } from "../src/config.ts";
-import { runTui, tuiEntry, tuiEnv } from "../src/commands/tui.ts";
+import { runTui, startupSetupIssues, tuiEntry, tuiEnv } from "../src/commands/tui.ts";
 import type { RunningStack } from "../src/supervisor/detect.ts";
 
 test("tui entry points at apps/tui and inherits the resolved config", () => {
@@ -111,6 +111,7 @@ test("runTui builds and starts the Job supervisor plan when the stack is idle", 
   const code = await runTui(config, {
     platform: "win32",
     detect: async () => stack(),
+    setupIssues: () => [],
     maintain: async () => ({ ran: true, rotated: [], gcCode: null, errors: [] }),
     start: async (built) => {
       plan = built;
@@ -132,6 +133,7 @@ test("runTui runs startup maintenance before starting the supervisor", async () 
   const code = await runTui(config, {
     platform: "win32",
     detect: async () => stack(),
+    setupIssues: () => [],
     maintain: async (received) => {
       events.push("maintain");
       assert.equal(received, config);
@@ -159,6 +161,7 @@ test("runTui continues when startup maintenance throws", async () => {
     const code = await runTui(config, {
       platform: "win32",
       detect: async () => stack(),
+      setupIssues: () => [],
       maintain: async () => {
         throw new Error("maintenance unavailable");
       },
@@ -189,4 +192,50 @@ test("runTui fails closed when the Windows Job API is unavailable", async () => 
     console.error = originalError;
   }
   assert.match(stderr.join("\n"), /Windows Job Object/);
+});
+
+test("runTui asks for setup when first-run resources are missing", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "super-rlm-tui-project-"));
+  const config = loadConfig({
+    env: { SUPER_RLM_HOME: mkdtempSync(join(tmpdir(), "super-rlm-tui-")) },
+    cwd,
+  });
+  let started = false;
+  const originalError = console.error;
+  const stderr: string[] = [];
+  console.error = (...args: unknown[]) => { stderr.push(args.map(String).join(" ")); };
+  try {
+    const code = await runTui(config, {
+      platform: "win32",
+      cwd,
+      detect: async () => stack(),
+      setupIssues: (received, receivedCwd) => {
+        assert.equal(received, config);
+        assert.equal(receivedCwd, cwd);
+        return ["project marker", "models"];
+      },
+      start: async () => {
+        started = true;
+        return 0;
+      },
+    });
+    assert.equal(code, 1);
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(started, false);
+  assert.match(stderr.join("\n"), /first-run setup is incomplete/);
+  assert.match(stderr.join("\n"), /missing project marker/);
+  assert.match(stderr.join("\n"), /Run `super-rlm setup`/);
+});
+
+test("startupSetupIssues reports each missing first-run resource", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "super-rlm-tui-project-"));
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-tui-"));
+  const config = { ...loadConfig({ env: { SUPER_RLM_HOME: home }, cwd }), reportSkill: join(home, "missing-skill") };
+  const issues = startupSetupIssues(config, cwd, {});
+  assert.ok(issues.some((issue) => issue.startsWith("project marker")));
+  assert.ok(issues.some((issue) => issue.startsWith("kernel venv")));
+  assert.ok(issues.some((issue) => issue.startsWith("report skill")));
+  assert.equal(issues.filter((issue) => issue.startsWith("models")).length, 2);
 });
