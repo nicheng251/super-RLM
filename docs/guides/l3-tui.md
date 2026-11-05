@@ -108,8 +108,8 @@ Slash commands:
 /help
 ```
 
-`/model` opens a full-screen Model & Profiles page. It hides Chat and the
-sidebar while open, but keeps the Chat input box visible at the bottom. Old text forms such as `/model list` and
+`/model` replaces the Chat content with a Model & Profiles page. The sidebar,
+the input-box hint, and the Chat input box remain visible and are not covered. Old text forms such as `/model list` and
 `/model thinking <level>` are not supported.
 
 Profile page:
@@ -144,7 +144,7 @@ Esc       return to the Profile page without applying
 ```
 
 While either page is open, Alt+1..4 view switching is disabled, and the input
-box is not focused.
+box is not focused; the page's own keys are used instead.
 Router changes apply to the current Router session. Worker profile changes are
 saved under `<SUPER_RLM_HOME>/profiles.overrides.json` and apply to subsequent
 Tickets without restarting the Orchestrator. `config/profiles.yaml` remains the

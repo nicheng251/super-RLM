@@ -459,10 +459,17 @@ export class TuiApp {
   private rebuildLayout(): void {
     this.mainScroll = null;
     if (this.modelSelectorOpen && this.modelSelector) {
+      const body = new HStack([
+        { component: this.modelSelector, basis: 0, grow: 1, minSize: 20 },
+        { component: this.sidebar, basis: 26, shrink: 0, minSize: 20, maxSize: 32 },
+      ], { gap: 1 });
       this.tui.setLayoutRoot(new VStack([
-        { component: this.modelSelector, basis: 0, grow: 1, minSize: 3 },
+        { component: this.statusBar, basis: "auto", shrink: 0, minSize: 1, maxSize: 1 },
+        { component: body, basis: 0, grow: 1, minSize: 3 },
+        { component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: 2 },
         { component: this.editor, basis: "auto", shrink: 0, minSize: 1 },
       ]));
+      this.updateFooter();
       this.tui.setFocus(this.modelSelector);
       return;
     }
