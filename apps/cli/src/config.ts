@@ -1,5 +1,6 @@
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +16,7 @@ export interface CliConfig {
   orchestratorUrl: string;
   routerToken: string;
   workerToken: string;
+  callbackKey: string;
   piCli: string;
   routerDir: string;
   routerExtension: string;
@@ -143,6 +145,127 @@ export function lookupModelInfo(path: string, provider: string, model: string): 
   return info;
 }
 
+export const SECRET_ENV_KEYS = [
+  "SUPER_RLM_ROUTER_TOKEN",
+  "SUPER_RLM_WORKER_TOKEN",
+  "SUPER_RLM_CALLBACK_KEY",
+] as const;
+
+export type SecretEnvKey = (typeof SECRET_ENV_KEYS)[number];
+
+const SECRET_KEY_SET: ReadonlySet<string> = new Set(SECRET_ENV_KEYS);
+
+export interface CliSecrets {
+  routerToken: string;
+  workerToken: string;
+  callbackKey: string;
+  file: string;
+}
+
+export function secretsFilePath(home: string): string {
+  return join(home, "secrets", "api.env");
+}
+
+/** Parse the small KEY=VALUE secret file. Unknown keys and malformed lines are ignored. */
+export function parseSecretsFile(text: string): Partial<Record<SecretEnvKey, string>> {
+  const parsed: Partial<Record<SecretEnvKey, string>> = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    let line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("export ")) line = line.slice("export ".length).trim();
+    const separator = line.indexOf("=");
+    if (separator <= 0) continue;
+    const key = line.slice(0, separator).trim();
+    if (!SECRET_KEY_SET.has(key)) continue;
+    let value = line.slice(separator + 1).trim();
+    if (
+      value.length >= 2
+      && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (value) parsed[key as SecretEnvKey] = value;
+  }
+  return parsed;
+}
+
+function randomSecret(): string {
+  return randomBytes(32).toString("hex");
+}
+
+function writeSecretsFile(file: string, values: Record<SecretEnvKey, string>): void {
+  const body = [
+    "# super-RLM local API secrets. Generated on first use; keep this file private.",
+    ...SECRET_ENV_KEYS.map((key) => `${key}=${values[key]}`),
+    "",
+  ].join("\n");
+  mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+  writeFileSync(file, body, { encoding: "utf8", mode: 0o600 });
+  try {
+    chmodSync(file, 0o600);
+  } catch {
+    // Best effort: Windows and some filesystems do not model POSIX modes.
+  }
+}
+
+/**
+ * Load the project API secrets, generating missing values on first use.
+ *
+ * The file is the normal production source. Explicit environment values win
+ * for the returned config (useful for tests and intentional rotation), but they
+ * are not persisted; generated values are written with owner-only permissions
+ * where the platform supports it. Failures to read or write the file degrade to
+ * ephemeral values so `status` and `down` keep working.
+ */
+export function loadOrCreateSecrets(home: string, env: NodeJS.ProcessEnv = process.env): CliSecrets {
+  const file = secretsFilePath(home);
+  let fromFile: Partial<Record<SecretEnvKey, string>> = {};
+  try {
+    if (existsSync(file)) fromFile = parseSecretsFile(readFileSync(file, "utf8"));
+  } catch {
+    fromFile = {};
+  }
+
+  const fileValues = {} as Record<SecretEnvKey, string>;
+  let changed = !existsSync(file);
+  for (const key of SECRET_ENV_KEYS) {
+    const current = fromFile[key];
+    if (current) {
+      fileValues[key] = current;
+    } else {
+      fileValues[key] = randomSecret();
+      changed = true;
+    }
+  }
+  if (changed) {
+    try {
+      writeSecretsFile(file, fileValues);
+    } catch {
+      // Read-only or otherwise unavailable home: keep working in memory.
+    }
+  }
+
+  const valueFor = (key: SecretEnvKey): string => env[key]?.trim() || fileValues[key];
+  return {
+    routerToken: valueFor("SUPER_RLM_ROUTER_TOKEN"),
+    workerToken: valueFor("SUPER_RLM_WORKER_TOKEN"),
+    callbackKey: valueFor("SUPER_RLM_CALLBACK_KEY"),
+    file,
+  };
+}
+
+export const REDACTED = "[redacted]";
+
+/** Copy of the CLI config safe to print: token and key fields are replaced. */
+export function redactConfig(config: CliConfig): Record<string, unknown> {
+  return {
+    ...config,
+    routerToken: REDACTED,
+    workerToken: REDACTED,
+    callbackKey: REDACTED,
+  };
+}
+
 export function readProjectId(cwd = process.cwd(), env = process.env): string {
   if (env.SUPER_RLM_PROJECT_ID) return env.SUPER_RLM_PROJECT_ID;
   const marker = join(cwd, ".super-rlm-project.json");
@@ -171,6 +294,7 @@ export function loadConfig(options: {
   const modelDefault = readModelDefault(modelsConfigPath);
   const projectId = options.projectId ?? readProjectId(cwd, env);
   const home = options.home ?? env.SUPER_RLM_HOME ?? join(homedir(), ".super-rlm", "projects", projectId);
+  const secrets = loadOrCreateSecrets(home, env);
   const workspaceRoot = env.SUPER_RLM_WORKSPACES ?? join(home, "workspaces");
   const port = Number(env.SUPER_RLM_PORT ?? "8787");
   const workerPort = Number(env.SUPER_RLM_WORKER_PORT ?? "8080");
@@ -197,8 +321,9 @@ export function loadConfig(options: {
     port,
     workerPort,
     orchestratorUrl: env.SUPER_RLM_ORCHESTRATOR_URL ?? `http://127.0.0.1:${port}`,
-    routerToken: env.SUPER_RLM_ROUTER_TOKEN ?? "dev-router-token",
-    workerToken: env.SUPER_RLM_WORKER_TOKEN ?? "dev-worker-token",
+    routerToken: secrets.routerToken,
+    workerToken: secrets.workerToken,
+    callbackKey: secrets.callbackKey,
     piCli: join(repoRoot, "runtime", "pi", "node_modules", "@earendil-works", "pi-coding-agent", "dist", "bundle", "cli.js"),
     routerDir: join(repoRoot, "apps", "router"),
     routerExtension: join(repoRoot, "apps", "router", "extensions", "super-rlm.ts"),
@@ -227,6 +352,7 @@ export function loadConfig(options: {
 
 export function ensureDirs(config: CliConfig): void {
   const dirs = [
+    join(config.home, "secrets"),
     join(config.home, "pi", "agent"),
     join(config.home, "pi", "sessions"),
     join(config.home, "prime", "agent"),
@@ -292,6 +418,7 @@ export function orchestratorEnv(config: CliConfig): NodeJS.ProcessEnv {
     SUPER_RLM_PORT: String(config.port),
     SUPER_RLM_ROUTER_TOKEN: config.routerToken,
     SUPER_RLM_WORKER_TOKEN: config.workerToken,
+    SUPER_RLM_CALLBACK_KEY: config.callbackKey,
     SUPER_RLM_MAX_CONCURRENT_TICKETS: process.env.SUPER_RLM_MAX_CONCURRENT_TICKETS ?? "4",
     SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK: process.env.SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK ?? "2",
   };
@@ -305,6 +432,7 @@ export function workerEnv(config: CliConfig): NodeJS.ProcessEnv {
     SUPER_RLM_ORCHESTRATOR_URL: config.orchestratorUrl,
     SUPER_RLM_WORKER_PORT: String(config.workerPort),
     SUPER_RLM_WORKER_TOKEN: config.workerToken,
+    SUPER_RLM_CALLBACK_KEY: config.callbackKey,
     SUPER_RLM_PRIME_AGENT: config.primeAgent,
     SUPER_RLM_PRIME_DAEMON: config.primeDaemonSocket,
     SUPER_RLM_PRIME_PROVIDER: config.primeProvider,

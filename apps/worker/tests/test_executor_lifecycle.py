@@ -176,6 +176,7 @@ async def test_cancel_after_spawn_stops_session_and_skips_enforcement(tmp_path, 
     assert state.cleanup_error is None
     states = [report.state for report in forwarder.reports]
     assert states == [ReportState.CANCELLED]
+    assert forwarder.reports[0].cleanup_error is None
 
     await manager.cancel(state.execution_id, "again")
     assert len(forwarder.reports) == 1
@@ -225,6 +226,34 @@ async def test_stop_session_failure_is_recorded_as_cleanup_error(tmp_path, acp):
     assert "stop_session" in state.cleanup_error
     assert "daemon unreachable" in state.cleanup_error
     assert acp.process.terminated is True
+    failed = [report for report in forwarder.reports if report.state is ReportState.FAILED]
+    assert len(failed) == 1
+    assert failed[0].cleanup_error == state.cleanup_error
+
+
+@pytest.mark.asyncio
+async def test_cancelled_report_carries_cleanup_error_when_stop_session_fails(tmp_path, acp):
+    events = acp.events
+    forwarder = FakeForwarder()
+    manager, _ = make_manager(
+        make_config(tmp_path),
+        events,
+        forwarder,
+        stop_error=DaemonError("daemon unreachable"),
+    )
+
+    acp.release = asyncio.Event()
+    acp.prompt_started = asyncio.Event()
+    state = await manager.start(make_request(tmp_path))
+    await asyncio.wait_for(acp.prompt_started.wait(), timeout=2)
+    await manager.cancel(state.execution_id, "user cancelled")
+    await asyncio.wait_for(state.done.wait(), timeout=2)
+
+    assert state.cleanup_error is not None
+    cancelled = [report for report in forwarder.reports if report.state is ReportState.CANCELLED]
+    assert len(cancelled) == 1
+    assert cancelled[0].cleanup_error == state.cleanup_error
+    assert "daemon unreachable" in cancelled[0].cleanup_error
 
 
 @pytest.mark.asyncio

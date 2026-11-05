@@ -129,7 +129,7 @@ test("restore refuses a backup from a newer schema and leaves the runtime untouc
 
   const manifestPath = join(backup.backupDir, "manifest.json");
   const manifest = readManifest(backup.backupDir);
-  writeFileSync(manifestPath, JSON.stringify({ ...manifest, schema_version: 6 }, null, 2), "utf8");
+  writeFileSync(manifestPath, JSON.stringify({ ...manifest, schema_version: 7 }, null, 2), "utf8");
 
   const targetHome = join(root, "target");
   mkdirSync(targetHome, { recursive: true });

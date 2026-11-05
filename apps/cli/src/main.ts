@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { loadConfig } from "./config.ts";
+import { loadConfig, redactConfig } from "./config.ts";
 import { daemonState, runningDaemons, shutdownProjectDaemon } from "./daemon.ts";
 import { runArtifacts } from "./commands/artifacts.ts";
 import { runBackup, runRestore } from "./commands/backup.ts";
@@ -182,7 +182,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     return runRestore(loadConfig(), backupDir);
   }
   if (parsed.command === "config") {
-    console.log(JSON.stringify(loadConfig(), null, 2));
+    console.log(JSON.stringify(redactConfig(loadConfig()), null, 2));
     return 0;
   }
   if (parsed.command === "tasks") {

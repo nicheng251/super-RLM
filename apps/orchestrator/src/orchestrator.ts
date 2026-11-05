@@ -88,6 +88,8 @@ export interface OrchestratorConfig {
   projectRepo: string | null;
   callbackUrl: string | null;
   callbackKey: string;
+  /** Allow private/loopback callback targets (tests or explicit local use). */
+  callbackAllowPrivate?: boolean;
   profiles?: ProfilesConfig;
 }
 
@@ -200,6 +202,7 @@ export class Orchestrator {
       this.store,
       this.config.callbackUrl,
       this.config.callbackKey,
+      { allowPrivate: this.config.callbackAllowPrivate ?? false },
     );
     await this.outbox.flush();
   }
@@ -288,6 +291,7 @@ export class Orchestrator {
         resume_message: null,
         delivered_to: [],
         delivery_error: null,
+        cleanup_error: null,
         workspace_metadata: null,
         metadata_error: null,
         created_at: now,
@@ -549,6 +553,7 @@ export class Orchestrator {
       no_op: outcome.noOp ?? ticket.no_op,
       delivered_to: report.delivered_to ?? [],
       delivery_error: report.delivery_error ?? null,
+      cleanup_error: report.cleanup_error ?? null,
       workspace_metadata: report.workspace_metadata ?? ticket.workspace_metadata,
       metadata_error: report.metadata_error ?? ticket.metadata_error,
       updated_at: nowIso(),

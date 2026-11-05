@@ -510,6 +510,7 @@ class ExecutionManager:
                 report=report,
                 delivered_to=state.delivered_to,
                 delivery_error=state.delivery_error,
+                cleanup_error=state.cleanup_error,
                 workspace_metadata=state.workspace_metadata,
                 metadata_error=state.metadata_error,
             )
@@ -569,6 +570,7 @@ class ExecutionManager:
                 report=report,
                 delivered_to=state.delivered_to,
                 delivery_error=state.delivery_error,
+                cleanup_error=state.cleanup_error,
                 workspace_metadata=state.workspace_metadata,
                 metadata_error=state.metadata_error,
             )

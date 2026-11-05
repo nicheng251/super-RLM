@@ -23,9 +23,10 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import { DatabaseSync } from "node:sqlite";
 
 import type { CliConfig } from "../config.ts";
+import { daemonState } from "../daemon.ts";
 
 export const SUPER_RLM_VERSION = "0.1.0";
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 const MANIFEST_NAME = "manifest.json";
 
 export interface BackupManifestFile {
@@ -104,6 +105,13 @@ export async function assertServicesStopped(config: CliConfig): Promise<void> {
   const running: string[] = [];
   for (const service of services) {
     if (await urlHealthy(service.url)) running.push(`${service.name} (${service.url})`);
+  }
+  const daemon = await daemonState(config);
+  if (daemon.error) {
+    throw new Error(`cannot determine Prime Agent daemon state: ${daemon.error}. Run \`super-rlm down\` before continuing.`);
+  }
+  if (daemon.running) {
+    running.push(`Prime Agent daemon (pid ${daemon.entries.filter((entry) => entry.pid > 0).map((entry) => entry.pid).join(",")})`);
   }
   if (running.length > 0) {
     throw new Error(`${running.join(" and ")} still running. Run \`super-rlm down\` before continuing.`);

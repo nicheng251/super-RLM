@@ -217,7 +217,7 @@ super-rlm                 # launch Router TUI
 super-rlm tasks           # headless task list
 super-rlm doctor
 super-rlm models sync
-super-rlm dev
+super-rlm
 ```
 
 ## 6. Packages

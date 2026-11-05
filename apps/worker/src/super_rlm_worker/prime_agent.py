@@ -7,7 +7,7 @@ import asyncio
 import os
 from pathlib import Path
 
-from .config import WorkerConfig
+from .config import WorkerConfig, apply_ticket_temp_env
 
 
 def strip_inherited_agent_env(env: dict[str, str]) -> dict[str, str]:
@@ -38,6 +38,7 @@ def build_env(
     blocked_bin: Path | None = None,
 ) -> dict[str, str]:
     env = strip_inherited_agent_env(dict(os.environ))
+    apply_ticket_temp_env(env, config.home, ticket_id)
     env.update({
         "PRIME_AGENT_CODING_AGENT_DIR": str(config.home / "prime" / "agent"),
         "PRIME_AGENT_CODING_AGENT_SESSION_DIR": str(session_dir),

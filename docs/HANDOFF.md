@@ -24,11 +24,13 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - Spike 结果：
   - `docs/spikes/pi-router.md`：Router 现在暴露 11 个控制面工具 + SSE 通知；伪 `bash` 调用被拒绝。
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
-- `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；24 个 Python 测试通过，`tsc --noEmit` 通过。
-- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v5，迁移前自动备份）；44 个 `node:test` 测试通过。
-- `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；47 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands 和 delivery 测试）。
-- `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles/tui` 可用；30 个 `node:test` 通过；`up/status/down` 已手动验证。
-- 当前单元/集成测试合计 169 个：protocol 26、orchestrator 44、worker 47、cli 30、router 2、tui 20。
+- `packages/protocol` 已建立：JSON Schema、Python pydantic 模型、TypeScript 类型；28 个 Python 测试通过，`tsc --noEmit` 通过。
+- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v6，迁移前自动备份）；55 个 `node:test` 测试通过。
+- `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；83 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands、delivery、daemon lifecycle 和 security 测试）。
+- `apps/cli` 已实现：`super-rlm` 直接启动 L3 TUI，并在 Windows Job Object 中管理 Orchestrator、Worker、Prime daemon 的完整生命周期；`tui` 是别名；后台语义 `up/router/dev` 已删除；`down/status/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles` 保留；52 个 `node:test` 通过。
+- 当前单元/集成测试合计 240 个：protocol 28、orchestrator 55、worker 83、cli 52、router 2、tui 20。
+- P0-A1 已实现：`super-rlm` 直接启动 TUI；Windows Job Object (`KILL_ON_JOB_CLOSE`) 包含 Orchestrator/Worker/TUI/daemon；Worker 显式启动并停止项目 daemon；Ticket cancel 使用 `prime-agent stop <session_ref stem>` 并记录 `cleanup_error`；随机 token 写入 `<home>/secrets/api.env`；loopback 强制；callback 基础 SSRF 防护；每 Ticket TEMP/PIP/NPM/XDG 隔离；prepare 输出 secret 脱敏。
+- 明确未做：模型 Proxy、Restricted Token、AppContainer、网络出口 allowlist、真正 `read_only` 文件系统强制。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
 - 已用真实 DeepSeek `deepseek-flash` 跑通：写文件任务成功（`hello.txt` 内容正确），以及 TUI 中 `/tasks` -> Task Detail -> 回答 -> resume -> succeeded。
@@ -60,14 +62,14 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 
 当前实现缺口：
 
-- Orchestrator 已有 outbox 和用户 callback HMAC；callback URL 仍是可信配置，公网 callback 还需要 SSRF/allowlist。
+- Orchestrator outbox 已做基础 SSRF 防护：scheme/credentials/DNS 私网/重定向/响应大小；仍不是完整 DNS pinning 或网络沙箱。
 - Worker 已有 per-profile prepare/blocked/model/thinking/agent_cwd/metadata/delivery；`read_only` 目前是策略元数据，尚未做文件系统写保护。
-- 还缺 per-Worker control token、容器隔离；L3 的快捷键兼容性和更多交互还需要补。
+- 仍缺 per-Worker control token、真正文件系统 ACL/AppContainer、模型 Proxy；L3 的快捷键兼容性和更多交互还需要补。
 - 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
 - HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
 - Router 默认异步调度：`task_create` 后立即返回，由 SSE 通知 Task 终态；`task_wait` 只用于用户显式要求等待，默认 15 秒、最大 60 秒，避免阻塞 TUI。
-- backup/restore 已实现；SQLite 当前 schema v5（outbox 表 + 迁移前自动备份）。
+- backup/restore 已实现；SQLite 当前 schema v6（outbox + cleanup_error + 迁移前自动备份）。
 - 真实模型回归是手动脚本，不进入普通 CI，避免产生 API 费用。
 - `runtime/prime-agent/` 和 `runtime/pi/node_modules/` 是本地 ignored 资产；`super-rlm bootstrap` 已覆盖 kernel venv 和 report skill，但 Pi package 仍需首次 npm install。
 - Baseline 已提交；当前 HEAD 以 `git log` 为准，工作树保持 clean。
@@ -77,7 +79,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 ```text
 apps/router/.pi/settings.json
 apps/router/extensions/super-rlm.ts          # 11 个控制面工具 + SSE 通知
-apps/cli/                                    # super-rlm 启动器：router/dev/tasks/doctor/init
+apps/cli/                                    # super-rlm TUI supervisor + maintenance commands
 apps/orchestrator/                           # 最小 TS 控制面：状态机/SQLite/slot/dispatch
 apps/worker/                                 # Python FastAPI + Prime Agent ACP adapter
 apps/worker/skills/super-rlm-report/        # Python report skill
@@ -90,7 +92,7 @@ apps/orchestrator/src/profiles.ts           # profile loader/validation
 apps/orchestrator/src/outbox.ts              # callback dispatcher
 apps/tui/                                    # L3 独立 TUI shell
 apps/cli/src/commands/tui.ts                 # super-rlm tui
-apps/orchestrator/src/db.ts                  # schema v5 + migration backup + outbox store
+apps/orchestrator/src/db.ts                  # schema v6 + migration backup + outbox store
 packages/protocol/                          # v0 JSON Schema + Python/TS types
 spikes/                                     # fake LLM、mock Orchestrator、ACP probes
 scripts/regression/                         # 真实 DeepSeek / L3 Chat 手动回归 harness

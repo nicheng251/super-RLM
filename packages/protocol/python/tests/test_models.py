@@ -231,6 +231,24 @@ def test_report_and_ticket_results_default_delivery_fields():
     assert result.metadata_error is None
 
 
+def test_reports_and_ticket_views_carry_cleanup_error():
+    report = m.WorkerReport.model_validate(make_report(cleanup_error="stop_session: daemon unreachable"))
+    assert report.cleanup_error == "stop_session: daemon unreachable"
+    assert m.WorkerReport.model_validate(make_report()).cleanup_error is None
+
+    summary = m.TicketSummary.model_validate(make_ticket_summary(cleanup_error="ACP terminate: denied"))
+    assert summary.cleanup_error == "ACP terminate: denied"
+    assert m.TicketSummary.model_validate(make_ticket_summary()).cleanup_error is None
+
+    result = m.TicketResult.model_validate({
+        "ticket_id": "tkt_1",
+        "status": "cancelled",
+        "cleanup_error": "stop_session: daemon unreachable",
+    })
+    assert result.cleanup_error == "stop_session: daemon unreachable"
+    assert m.TicketResult.model_validate({"ticket_id": "tkt_1", "status": "succeeded"}).cleanup_error is None
+
+
 def test_reports_and_ticket_views_carry_workspace_metadata():
     report = m.WorkerReport.model_validate(make_report(
         workspace_metadata={"vcs": "git", "branch": "b", "commit": "c"},

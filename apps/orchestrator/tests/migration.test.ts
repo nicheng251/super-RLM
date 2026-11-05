@@ -22,8 +22,9 @@ function metaVersion(store: Store): string | undefined {
 }
 
 function assertMigrated(store: Store): void {
-  assert.equal(metaVersion(store), "5");
+  assert.equal(metaVersion(store), "6");
   assert.ok(tableNames(store).includes("outbox"));
+  assert.ok(columns(store).includes("cleanup_error"));
 }
 
 interface MigrationSidecar {
@@ -43,7 +44,7 @@ function assertPreMigrationBackup(dbPath: string, oldVersion: number): void {
   const sidecar = JSON.parse(readFileSync(`${backupPath}.json`, "utf8")) as MigrationSidecar;
   assert.equal(sidecar.source, resolve(dbPath));
   assert.equal(sidecar.old_version, oldVersion);
-  assert.equal(sidecar.target_version, 5);
+  assert.equal(sidecar.target_version, 6);
   assert.equal(typeof sidecar.created_at, "string");
   assert.ok(!Number.isNaN(Date.parse(sidecar.created_at)));
 
@@ -56,14 +57,15 @@ function assertPreMigrationBackup(dbPath: string, oldVersion: number): void {
   }
 }
 
-test("a fresh database is at schema v5 and creates no pre-migration backup", () => {
+test("a fresh database is at schema v6 and creates no pre-migration backup", () => {
   const dir = mkdtempSync(join(tmpdir(), "super-rlm-migrate-"));
   const store = new Store(join(dir, "db.sqlite"));
-  assert.equal(metaVersion(store), "5");
+  assert.equal(metaVersion(store), "6");
   assert.ok(columns(store).includes("priority_next"));
   assert.ok(columns(store).includes("resume_message"));
   assert.ok(columns(store).includes("delivered_to"));
   assert.ok(columns(store).includes("delivery_error"));
+  assert.ok(columns(store).includes("cleanup_error"));
   assert.ok(columns(store).includes("workspace_metadata"));
   assert.ok(columns(store).includes("metadata_error"));
   assert.ok(tableNames(store).includes("outbox"));
@@ -71,7 +73,7 @@ test("a fresh database is at schema v5 and creates no pre-migration backup", () 
   store.close();
 });
 
-test("a v1 database is backed up and gains the v2-v5 schema without losing data", () => {
+test("a v1 database is backed up and gains the v2-v6 schema without losing data", () => {
   const dir = mkdtempSync(join(tmpdir(), "super-rlm-migrate-"));
   const path = join(dir, "db.sqlite");
   const first = new Store(path);
@@ -81,6 +83,7 @@ test("a v1 database is backed up and gains the v2-v5 schema without losing data"
   first.db.exec("ALTER TABLE tickets DROP COLUMN delivery_error");
   first.db.exec("ALTER TABLE tickets DROP COLUMN workspace_metadata");
   first.db.exec("ALTER TABLE tickets DROP COLUMN metadata_error");
+  first.db.exec("ALTER TABLE tickets DROP COLUMN cleanup_error");
   first.db.prepare("UPDATE meta SET value = '1' WHERE key = 'schema_version'").run();
   first.db.prepare(`
     INSERT INTO tasks (task_id, prompt, status, metadata, created_at, updated_at, cancel_requested)
@@ -94,6 +97,7 @@ test("a v1 database is backed up and gains the v2-v5 schema without losing data"
   assert.ok(columns(second).includes("resume_message"));
   assert.ok(columns(second).includes("delivered_to"));
   assert.ok(columns(second).includes("delivery_error"));
+  assert.ok(columns(second).includes("cleanup_error"));
   assert.ok(columns(second).includes("workspace_metadata"));
   assert.ok(columns(second).includes("metadata_error"));
   assert.equal(second.getTask("tsk_old")?.prompt, "old");
@@ -101,7 +105,7 @@ test("a v1 database is backed up and gains the v2-v5 schema without losing data"
   assertPreMigrationBackup(path, 1);
 });
 
-test("a v2 database is backed up and gains the v3-v5 schema without losing data", () => {
+test("a v2 database is backed up and gains the v3-v6 schema without losing data", () => {
   const dir = mkdtempSync(join(tmpdir(), "super-rlm-migrate-"));
   const path = join(dir, "db.sqlite");
   const first = new Store(path);
@@ -109,6 +113,7 @@ test("a v2 database is backed up and gains the v3-v5 schema without losing data"
   first.db.exec("ALTER TABLE tickets DROP COLUMN delivery_error");
   first.db.exec("ALTER TABLE tickets DROP COLUMN workspace_metadata");
   first.db.exec("ALTER TABLE tickets DROP COLUMN metadata_error");
+  first.db.exec("ALTER TABLE tickets DROP COLUMN cleanup_error");
   first.db.prepare("UPDATE meta SET value = '2' WHERE key = 'schema_version'").run();
   first.db.prepare(`
     INSERT INTO tasks (task_id, prompt, status, metadata, created_at, updated_at, cancel_requested)
@@ -120,6 +125,7 @@ test("a v2 database is backed up and gains the v3-v5 schema without losing data"
   assertMigrated(second);
   assert.ok(columns(second).includes("delivered_to"));
   assert.ok(columns(second).includes("delivery_error"));
+  assert.ok(columns(second).includes("cleanup_error"));
   assert.ok(columns(second).includes("workspace_metadata"));
   assert.ok(columns(second).includes("metadata_error"));
   assert.equal(second.getTask("tsk_old")?.prompt, "old");
@@ -127,12 +133,13 @@ test("a v2 database is backed up and gains the v3-v5 schema without losing data"
   assertPreMigrationBackup(path, 2);
 });
 
-test("a v3 database is backed up and gains the workspace metadata columns without losing data", () => {
+test("a v3 database is backed up and gains the workspace metadata and cleanup_error columns without losing data", () => {
   const dir = mkdtempSync(join(tmpdir(), "super-rlm-migrate-"));
   const path = join(dir, "db.sqlite");
   const first = new Store(path);
   first.db.exec("ALTER TABLE tickets DROP COLUMN workspace_metadata");
   first.db.exec("ALTER TABLE tickets DROP COLUMN metadata_error");
+  first.db.exec("ALTER TABLE tickets DROP COLUMN cleanup_error");
   first.db.prepare("UPDATE meta SET value = '3' WHERE key = 'schema_version'").run();
   first.db.prepare(`
     INSERT INTO tasks (task_id, prompt, status, metadata, created_at, updated_at, cancel_requested)
@@ -144,16 +151,18 @@ test("a v3 database is backed up and gains the workspace metadata columns withou
   assertMigrated(second);
   assert.ok(columns(second).includes("workspace_metadata"));
   assert.ok(columns(second).includes("metadata_error"));
+  assert.ok(columns(second).includes("cleanup_error"));
   assert.equal(second.getTask("tsk_old")?.prompt, "old");
   second.close();
   assertPreMigrationBackup(path, 3);
 });
 
-test("a v4 database is backed up and gains the outbox table without losing data", () => {
+test("a v4 database is backed up and gains the outbox table and cleanup_error column without losing data", () => {
   const dir = mkdtempSync(join(tmpdir(), "super-rlm-migrate-"));
   const path = join(dir, "db.sqlite");
   const first = new Store(path);
   first.db.exec("DROP TABLE outbox");
+  first.db.exec("ALTER TABLE tickets DROP COLUMN cleanup_error");
   first.db.prepare("UPDATE meta SET value = '4' WHERE key = 'schema_version'").run();
   first.db.prepare(`
     INSERT INTO tasks (task_id, prompt, status, metadata, created_at, updated_at, cancel_requested)
@@ -168,6 +177,26 @@ test("a v4 database is backed up and gains the outbox table without losing data"
   assert.ok(indexes.includes("outbox_status_next_idx"));
   second.close();
   assertPreMigrationBackup(path, 4);
+});
+
+test("a v5 database is backed up and gains the cleanup_error column without losing data", () => {
+  const dir = mkdtempSync(join(tmpdir(), "super-rlm-migrate-"));
+  const path = join(dir, "db.sqlite");
+  const first = new Store(path);
+  first.db.exec("ALTER TABLE tickets DROP COLUMN cleanup_error");
+  first.db.prepare("UPDATE meta SET value = '5' WHERE key = 'schema_version'").run();
+  first.db.prepare(`
+    INSERT INTO tasks (task_id, prompt, status, metadata, created_at, updated_at, cancel_requested)
+    VALUES ('tsk_old', 'old', 'queued', '{}', '2026-01-01', '2026-01-01', 0)
+  `).run();
+  first.close();
+
+  const second = new Store(path);
+  assertMigrated(second);
+  assert.ok(tableNames(second).includes("outbox"));
+  assert.equal(second.getTask("tsk_old")?.prompt, "old");
+  second.close();
+  assertPreMigrationBackup(path, 5);
 });
 
 test("a newer database is refused without a backup", () => {

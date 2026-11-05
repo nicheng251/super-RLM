@@ -189,6 +189,17 @@ def test_schema_exposes_delivery_fields():
     ))
 
 
+def test_schema_exposes_cleanup_error():
+    for name in ["WorkerReport", "TicketSummary", "TicketResult"]:
+        assert "cleanup_error" in SCHEMA["$defs"][name]["properties"]
+    validator("WorkerReport").validate(report_payload(cleanup_error="stop_session: daemon unreachable"))
+    validator("TicketResult").validate({
+        "ticket_id": "tkt_1",
+        "status": "cancelled",
+        "cleanup_error": "stop_session: daemon unreachable",
+    })
+
+
 def test_worker_view_schema_accepts_worker_fields():
     validator("WorkerView").validate({
         "worker_id": "wrk_1",

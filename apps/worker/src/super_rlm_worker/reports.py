@@ -39,6 +39,7 @@ def build_worker_report(
     report: SkillReport,
     delivered_to: list[str] | None = None,
     delivery_error: str | None = None,
+    cleanup_error: str | None = None,
     workspace_metadata: dict[str, Any] | None = None,
     metadata_error: str | None = None,
 ) -> WorkerReport:
@@ -57,6 +58,7 @@ def build_worker_report(
         question=report.question,
         delivered_to=delivered_to or [],
         delivery_error=delivery_error,
+        cleanup_error=cleanup_error,
         workspace_metadata=workspace_metadata,
         metadata_error=metadata_error,
         timestamp=datetime.now(timezone.utc),

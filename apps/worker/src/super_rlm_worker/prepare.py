@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .config import WorkerConfig
+from .config import WorkerConfig, apply_ticket_temp_env
+from .redact import redact_secrets
 
 LOG = logging.getLogger("super_rlm_worker.prepare")
 
@@ -51,6 +52,7 @@ def build_prepare_env(
     assignment_id: str,
 ) -> dict[str, str]:
     env = dict(os.environ)
+    apply_ticket_temp_env(env, config.home, ticket_id)
     env.update({
         "SUPER_RLM_HOME": str(config.home),
         "SUPER_RLM_TICKET_ID": ticket_id,
@@ -120,7 +122,9 @@ async def run_shell(
         output_bytes, _ = await asyncio.wait_for(process.communicate(), timeout=timeout_s)
     except asyncio.TimeoutError:
         await _kill(process)
-        raise PrepareError(f"command timed out after {timeout_s:g}s: {command}") from None
+        raise PrepareError(
+            f"command timed out after {timeout_s:g}s: {redact_secrets(command)}"
+        ) from None
     except asyncio.CancelledError:
         await _kill(process)
         raise
@@ -154,7 +158,7 @@ async def prepare_workspace(
         return None
 
     env = build_prepare_env(config, workspace, ticket_id, assignment_id)
-    LOG.info("preparing workspace %s: %s", workspace, command)
+    LOG.info("preparing workspace %s: %s", workspace, redact_secrets(command))
     returncode, output = await run_shell(
         config,
         command,
@@ -162,10 +166,11 @@ async def prepare_workspace(
         env=env,
         timeout_s=config.prepare_timeout_s,
     )
-    if output:
-        LOG.info("prepare output for %s:\n%s", workspace, output[-4000:])
+    safe_output = redact_secrets(output)
+    if safe_output:
+        LOG.info("prepare output for %s:\n%s", workspace, safe_output[-4000:])
     if returncode != 0:
-        tail = output[-2000:]
+        tail = safe_output[-2000:]
         message = f"prepare_command exited with code {returncode}"
         if tail:
             message = f"{message}: {tail}"

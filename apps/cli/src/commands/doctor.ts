@@ -2,7 +2,8 @@
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-import type { CliConfig } from "../config.ts";
+import { redactConfig, type CliConfig } from "../config.ts";
+import { daemonState } from "../daemon.ts";
 
 interface Check {
   name: string;
@@ -39,6 +40,7 @@ export async function runDoctor(config: CliConfig, options: { json?: boolean } =
 
   const orchestrator = await health(`${config.orchestratorUrl}/health`, config.routerToken);
   const worker = await health(`http://127.0.0.1:${config.workerPort}/v1/health`, config.workerToken);
+  const daemon = await daemonState(config);
 
   const checks: Check[] = [
     { name: "node", ok: nodeOk(), required: true, detail: process.versions.node },
@@ -62,10 +64,16 @@ export async function runDoctor(config: CliConfig, options: { json?: boolean } =
     { name: "report-skill", ok: existsSync(config.reportSkill), required: true, detail: config.reportSkill },
     { name: "orchestrator-health", ok: orchestrator.ok, required: false, detail: `${config.orchestratorUrl} ${orchestrator.detail}` },
     { name: "worker-health", ok: worker.ok, required: false, detail: `http://127.0.0.1:${config.workerPort} ${worker.detail}` },
+    {
+      name: "prime-daemon",
+      ok: daemon.available && !daemon.error,
+      required: false,
+      detail: daemon.error ? daemon.error : daemon.running ? "running" : "down",
+    },
   ];
 
   if (options.json) {
-    console.log(JSON.stringify({ config, checks }, null, 2));
+    console.log(JSON.stringify({ config: redactConfig(config), checks }, null, 2));
   } else {
     for (const check of checks) {
       const mark = check.ok ? "ok" : check.required ? "FAIL" : "warn";

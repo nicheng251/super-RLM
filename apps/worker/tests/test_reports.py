@@ -7,8 +7,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from super_rlm_protocol import ReportState, WorkerReport
-from super_rlm_worker.reports import ReportForwarder
+from super_rlm_protocol import ReportState, SkillReport, WorkerReport
+from super_rlm_worker.reports import ReportForwarder, build_worker_report
 
 
 def report() -> WorkerReport:
@@ -24,6 +24,24 @@ def report() -> WorkerReport:
         artifacts=[],
         timestamp="2026-11-04T00:00:00Z",
     )
+
+
+def build_report(**overrides) -> WorkerReport:
+    return build_worker_report(
+        ticket_id="tkt_1",
+        assignment_id="asg_1",
+        execution_id="exe_1",
+        seq=2,
+        session_ref=None,
+        report=SkillReport(state=ReportState.CANCELLED, summary="execution cancelled"),
+        **overrides,
+    )
+
+
+def test_build_worker_report_carries_cleanup_error():
+    assert build_report().cleanup_error is None
+    report = build_report(cleanup_error="stop_session: daemon unreachable")
+    assert report.cleanup_error == "stop_session: daemon unreachable"
 
 
 class Capture(BaseHTTPRequestHandler):

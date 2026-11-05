@@ -95,6 +95,7 @@ function ticketRecord(ticketId: string): TicketRecord {
     resume_message: null,
     delivered_to: [],
     delivery_error: null,
+    cleanup_error: null,
     workspace_metadata: null,
     metadata_error: null,
     created_at: "2026-11-05T00:00:00Z",
@@ -134,6 +135,15 @@ test("ticket views return reported workspace metadata", () => {
   assert.equal(summary.metadata_error, "ignored extra metadata");
   assert.equal(summary.branch, "ticket/output");
   assert.equal(summary.commit, "0123456789abcdef");
+});
+
+test("ticket views carry the cleanup error", () => {
+  const ticket = ticketRecord("tkt_cleanup");
+  ticket.cleanup_error = "stop_session: daemon unreachable";
+
+  assert.equal(ticketResult(ticket).cleanup_error, "stop_session: daemon unreachable");
+  assert.equal(ticketSummary(ticket).cleanup_error, "stop_session: daemon unreachable");
+  assert.equal(ticketResult(ticketRecord("tkt_none")).cleanup_error, null);
 });
 
 test("non-git workspace metadata exposes no branch or commit", () => {

@@ -1510,6 +1510,18 @@
           ],
           "default": null,
           "title": "Delivery Error"
+        },
+        "cleanup_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cleanup Error"
         }
       },
       "required": [
@@ -1751,6 +1763,18 @@
           ],
           "default": null,
           "title": "Delivery Error"
+        },
+        "cleanup_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cleanup Error"
         }
       },
       "required": [
@@ -2062,6 +2086,18 @@
           ],
           "default": null,
           "title": "Delivery Error"
+        },
+        "cleanup_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cleanup Error"
         },
         "timestamp": {
           "format": "date-time",

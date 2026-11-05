@@ -1,6 +1,6 @@
 
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -9,11 +9,15 @@ import {
   buildRouterArgs,
   ensureDirs,
   loadConfig,
+  loadOrCreateSecrets,
   lookupModelInfo,
   orchestratorEnv,
+  parseSecretsFile,
   readModelDefault,
   readProjectId,
+  redactConfig,
   routerEnv,
+  secretsFilePath,
   workerEnv,
 } from "../src/config.ts";
 
@@ -156,4 +160,94 @@ test("workspace root defaults under home and honors SUPER_RLM_WORKSPACES", () =>
   assert.equal(workerEnv(customConfig).SUPER_RLM_WORKSPACES, customRoot);
   ensureDirs(customConfig);
   assert.ok(existsSync(customRoot));
+});
+
+test("loadConfig generates project API secrets once and reuses them", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-secrets-"));
+  const config = loadConfig({ env: { SUPER_RLM_HOME: home }, cwd: tmpdir() });
+  const file = secretsFilePath(home);
+
+  assert.ok(existsSync(file));
+  const parsed = parseSecretsFile(readFileSync(file, "utf8"));
+  assert.match(parsed.SUPER_RLM_ROUTER_TOKEN ?? "", /^[0-9a-f]{64}$/);
+  assert.match(parsed.SUPER_RLM_WORKER_TOKEN ?? "", /^[0-9a-f]{64}$/);
+  assert.match(parsed.SUPER_RLM_CALLBACK_KEY ?? "", /^[0-9a-f]{64}$/);
+  assert.equal(config.routerToken, parsed.SUPER_RLM_ROUTER_TOKEN);
+  assert.equal(config.workerToken, parsed.SUPER_RLM_WORKER_TOKEN);
+  assert.equal(config.callbackKey, parsed.SUPER_RLM_CALLBACK_KEY);
+  assert.notEqual(config.routerToken, config.workerToken);
+  assert.notEqual(config.workerToken, config.callbackKey);
+  assert.ok(!["dev-router-token", "dev-worker-token", "dev-callback-key"].includes(config.routerToken));
+  if (process.platform !== "win32") {
+    assert.equal(statSync(file).mode & 0o077, 0);
+  }
+
+  const again = loadConfig({ env: { SUPER_RLM_HOME: home }, cwd: tmpdir() });
+  assert.equal(again.routerToken, config.routerToken);
+  assert.equal(again.workerToken, config.workerToken);
+  assert.equal(again.callbackKey, config.callbackKey);
+});
+
+test("explicit environment secrets override the secret file without breaking it", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-secrets-env-"));
+  const config = loadConfig({
+    env: {
+      SUPER_RLM_HOME: home,
+      SUPER_RLM_ROUTER_TOKEN: "env-router-token",
+      SUPER_RLM_WORKER_TOKEN: "env-worker-token",
+      SUPER_RLM_CALLBACK_KEY: "env-callback-key",
+    },
+    cwd: tmpdir(),
+  });
+  assert.equal(config.routerToken, "env-router-token");
+  assert.equal(config.workerToken, "env-worker-token");
+  assert.equal(config.callbackKey, "env-callback-key");
+  assert.equal(orchestratorEnv(config).SUPER_RLM_CALLBACK_KEY, "env-callback-key");
+  assert.equal(workerEnv(config).SUPER_RLM_CALLBACK_KEY, "env-callback-key");
+  assert.equal(workerEnv(config).SUPER_RLM_WORKER_TOKEN, "env-worker-token");
+
+  const fromFile = loadOrCreateSecrets(home, {});
+  assert.match(fromFile.routerToken, /^[0-9a-f]{64}$/);
+  assert.notEqual(fromFile.routerToken, "env-router-token");
+});
+
+test("a malformed or partial secret file is repaired without losing valid entries", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-secrets-partial-"));
+  const file = secretsFilePath(home);
+  ensureDirs(loadConfig({ env: { SUPER_RLM_HOME: home }, cwd: tmpdir() }));
+  writeFileSync(join(home, "secrets", "api.env"), [
+    "not a secret line",
+    "SUPER_RLM_ROUTER_TOKEN=keep-me",
+    "SUPER_RLM_WORKER_TOKEN=",
+  ].join("\n"));
+
+  const secrets = loadOrCreateSecrets(home, {});
+  assert.equal(secrets.routerToken, "keep-me");
+  assert.match(secrets.workerToken, /^[0-9a-f]{64}$/);
+  assert.match(secrets.callbackKey, /^[0-9a-f]{64}$/);
+  const parsed = parseSecretsFile(readFileSync(file, "utf8"));
+  assert.equal(parsed.SUPER_RLM_ROUTER_TOKEN, "keep-me");
+  assert.equal(parsed.SUPER_RLM_WORKER_TOKEN, secrets.workerToken);
+});
+
+test("redactConfig hides tokens and keys", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-redact-"));
+  const config = loadConfig({ env: { SUPER_RLM_HOME: home }, cwd: tmpdir() });
+  const redacted = redactConfig(config);
+  assert.equal(redacted.routerToken, "[redacted]");
+  assert.equal(redacted.workerToken, "[redacted]");
+  assert.equal(redacted.callbackKey, "[redacted]");
+  const printed = JSON.stringify(redacted);
+  assert.ok(!printed.includes(config.routerToken));
+  assert.ok(!printed.includes(config.workerToken));
+  assert.ok(!printed.includes(config.callbackKey));
+});
+
+test("unreadable or unwritable secret files degrade to ephemeral secrets", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-secrets-broken-"));
+  mkdirSync(join(home, "secrets", "api.env"), { recursive: true });
+  const secrets = loadOrCreateSecrets(home, {});
+  assert.match(secrets.routerToken, /^[0-9a-f]{64}$/);
+  assert.match(secrets.workerToken, /^[0-9a-f]{64}$/);
+  assert.match(secrets.callbackKey, /^[0-9a-f]{64}$/);
 });

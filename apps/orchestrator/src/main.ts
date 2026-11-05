@@ -41,6 +41,7 @@ async function main(): Promise<void> {
     projectRepo: config.projectRepo,
     callbackUrl: config.callbackUrl,
     callbackKey: config.callbackKey,
+    callbackAllowPrivate: config.callbackAllowPrivate,
     profiles,
   });
   orchestrator.recover();

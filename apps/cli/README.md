@@ -19,7 +19,7 @@ super-rlm profiles list|show <name>|validate  # inspect config/profiles.yaml
 super-rlm artifacts <ticket_id> [--to <dir>] [--all]  # copy Ticket artifacts
 super-rlm backup <dir>    # offline backup of SUPER_RLM_HOME
 super-rlm restore <dir>   # restore an offline backup
-super-rlm config          # print resolved paths and tokens
+super-rlm config          # print resolved paths (token/key fields redacted)
 ```
 
 `super-rlm` is the normal entry point. It refuses to start when an Orchestrator,
@@ -204,8 +204,9 @@ No built-in tools are registered. The extension is the only tool source.
 | `SUPER_RLM_PROJECT_ID` | marker or `default` | Project identity. |
 | `SUPER_RLM_PORT` | `8787` | Orchestrator port. |
 | `SUPER_RLM_WORKER_PORT` | `8080` | Worker port. |
-| `SUPER_RLM_ROUTER_TOKEN` | `dev-router-token` | Router bearer token. |
-| `SUPER_RLM_WORKER_TOKEN` | `dev-worker-token` | Worker bearer token. |
+| `SUPER_RLM_ROUTER_TOKEN` | generated in `<home>/secrets/api.env` | Router bearer token; an explicit env value overrides the file. |
+| `SUPER_RLM_WORKER_TOKEN` | generated in `<home>/secrets/api.env` | Worker bearer token; an explicit env value overrides the file. |
+| `SUPER_RLM_CALLBACK_KEY` | generated in `<home>/secrets/api.env` | HMAC key shared by Worker reports and the Orchestrator outbox. |
 | `SUPER_RLM_PRIME_PROVIDER` | `fake` | Prime model provider. |
 | `SUPER_RLM_PRIME_MODEL` | `fake-1` | Prime model id. |
 | `SUPER_RLM_KERNEL_VENV` | `<home>/prime/kernel-venv` | Prime kernel venv. |

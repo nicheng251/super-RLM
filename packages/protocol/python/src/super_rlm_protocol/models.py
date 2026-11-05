@@ -149,6 +149,7 @@ class TicketSummary(BaseModel):
     metadata_error: str | None = None
     delivered_to: list[str] = Field(default_factory=list)
     delivery_error: str | None = None
+    cleanup_error: str | None = None
 
 
 class TicketResult(BaseModel):
@@ -171,6 +172,7 @@ class TicketResult(BaseModel):
     metadata_error: str | None = None
     delivered_to: list[str] = Field(default_factory=list)
     delivery_error: str | None = None
+    cleanup_error: str | None = None
 
 
 class TaskView(BaseModel):
@@ -442,6 +444,7 @@ class WorkerReport(BaseModel):
     metadata_error: str | None = None
     delivered_to: list[str] = Field(default_factory=list)
     delivery_error: str | None = None
+    cleanup_error: str | None = None
     timestamp: datetime
 
     @model_validator(mode="after")

@@ -149,6 +149,7 @@ export interface TicketSummary {
   metadata_error?: string | null;
   delivered_to: string[];
   delivery_error: string | null;
+  cleanup_error: string | null;
 }
 
 export interface TicketResult {
@@ -169,6 +170,7 @@ export interface TicketResult {
   metadata_error?: string | null;
   delivered_to: string[];
   delivery_error: string | null;
+  cleanup_error: string | null;
 }
 
 export interface TaskView {
@@ -386,6 +388,7 @@ export interface WorkerReport {
   metadata_error?: string | null;
   delivered_to?: string[];
   delivery_error?: string | null;
+  cleanup_error?: string | null;
   timestamp: string;
 }
 

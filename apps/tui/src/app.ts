@@ -970,6 +970,7 @@ export class TuiApp {
       lines.push(`commit: ${ticket.commit ?? "-"}`);
       lines.push(`delivered_to: ${ticket.delivered_to.length > 0 ? ticket.delivered_to.join(", ") : "-"}`);
       lines.push(`delivery_error: ${ticket.delivery_error ?? "-"}`);
+      lines.push(`cleanup_error: ${ticket.cleanup_error ?? "-"}`);
     }
     this.detailPane.setLines(lines);
   }

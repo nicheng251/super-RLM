@@ -16,6 +16,8 @@ import {
 import type { ExecutionRequest, WorkerReport } from "../../../packages/protocol/ts/index.ts";
 
 const NOW = new Date("2026-11-05T00:00:00.000Z");
+const PUBLIC_ADDRESS = "93.184.216.34";
+const resolvePublic = async () => [PUBLIC_ADDRESS];
 
 function harness(callbackUrl: string | null = "http://callback.test/hook") {
   const calls: ExecutionRequest[] = [];
@@ -145,6 +147,7 @@ test("the dispatcher posts a signed payload and marks it delivered", async () =>
 
   const dispatcher = new OutboxDispatcher(store, "http://callback.test/hook", "callback-secret", {
     now: () => NOW,
+    resolveHost: resolvePublic,
   });
   const count = await dispatcher.flush(20, fakeFetch);
 
@@ -190,6 +193,7 @@ test("a failed delivery backs off, and the eighth failure marks it failed", asyn
   const fakeFetch = (async () => new Response("nope", { status: 503 })) as typeof fetch;
   const dispatcher = new OutboxDispatcher(store, "http://callback.test/hook", "callback-secret", {
     now: () => NOW,
+    resolveHost: resolvePublic,
   });
 
   for (let attempt = 1; attempt <= MAX_CALLBACK_ATTEMPTS; attempt += 1) {
@@ -223,6 +227,7 @@ test("network errors are recorded as retryable failures", async () => {
   const fakeFetch = (async () => { throw new Error("connection refused"); }) as typeof fetch;
   const dispatcher = new OutboxDispatcher(store, "http://callback.test/hook", "callback-secret", {
     now: () => NOW,
+    resolveHost: resolvePublic,
   });
 
   await dispatcher.flush(20, fakeFetch);
@@ -262,4 +267,155 @@ test("config parses callback URL and key from the environment", () => {
   assert.equal(configured.callbackKey, "secret");
 
   assert.equal(loadConfig({ SUPER_RLM_CALLBACK_URL: "   " } as NodeJS.ProcessEnv).callbackUrl, null);
+});
+
+interface CapturedFailure {
+  id: number;
+  input: { attempts: number; nextAttemptAt: string; error: string; status?: string };
+}
+
+function callbackStore(rows: OutboxRecord[]) {
+  const failures: CapturedFailure[] = [];
+  const delivered: number[] = [];
+  return {
+    failures,
+    delivered,
+    store: {
+      dueOutbox: () => rows,
+      markOutboxDelivered: (id: number) => { delivered.push(id); },
+      markOutboxFailed: (id: number, input: CapturedFailure["input"]) => { failures.push({ id, input }); },
+    },
+  };
+}
+
+test("callback targets with private addresses, bad schemes, or credentials are rejected before delivery", async () => {
+  const cases: Array<{ target: string; resolveHost: () => Promise<string[]> }> = [
+    { target: "http://127.0.0.1/hook", resolveHost: resolvePublic },
+    { target: "http://10.1.2.3/hook", resolveHost: resolvePublic },
+    { target: "http://172.16.4.5/hook", resolveHost: resolvePublic },
+    { target: "http://169.254.169.254/latest/meta-data", resolveHost: resolvePublic },
+    { target: "http://[::1]/hook", resolveHost: resolvePublic },
+    { target: "http://[::ffff:127.0.0.1]/hook", resolveHost: resolvePublic },
+    { target: "ftp://callback.test/hook", resolveHost: resolvePublic },
+    { target: "http://user:pass@callback.test/hook", resolveHost: resolvePublic },
+    { target: "http://internal.test/hook", resolveHost: async () => ["10.0.0.7"] },
+  ];
+
+  for (const testCase of cases) {
+    const { store, failures, delivered } = callbackStore([outboxRecord({ target: testCase.target })]);
+    let fetchCalls = 0;
+    const fakeFetch = (async () => {
+      fetchCalls += 1;
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const dispatcher = new OutboxDispatcher(store, "https://public.test/hook", "callback-secret", {
+      now: () => NOW,
+      resolveHost: testCase.resolveHost,
+    });
+
+    await dispatcher.flush(20, fakeFetch);
+
+    assert.equal(fetchCalls, 0, testCase.target);
+    assert.equal(delivered.length, 0, testCase.target);
+    assert.equal(failures.length, 1, testCase.target);
+    assert.match(failures[0].input.error, /^callback target rejected:/, testCase.target);
+  }
+});
+
+test("a public callback target is delivered with redirects disabled", async () => {
+  const { store, failures, delivered } = callbackStore([outboxRecord()]);
+  const captured: RequestInit[] = [];
+  const fakeFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    captured.push(init ?? {});
+    return new Response("ok", { status: 200 });
+  }) as typeof fetch;
+  const dispatcher = new OutboxDispatcher(store, "https://public.test/hook", "callback-secret", {
+    now: () => NOW,
+    resolveHost: resolvePublic,
+  });
+
+  assert.equal(await dispatcher.flush(20, fakeFetch), 1);
+  assert.deepEqual(failures, []);
+  assert.deepEqual(delivered, [1]);
+  assert.equal(captured[0].redirect, "manual");
+  assert.ok(captured[0].signal instanceof AbortSignal);
+});
+
+test("redirect responses are treated as failures, not followed", async () => {
+  const { store, failures } = callbackStore([outboxRecord()]);
+  const captured: RequestInit[] = [];
+  const fakeFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    captured.push(init ?? {});
+    return new Response(null, { status: 302, headers: { location: "http://169.254.169.254/" } });
+  }) as typeof fetch;
+  const dispatcher = new OutboxDispatcher(store, "https://public.test/hook", "callback-secret", {
+    now: () => NOW,
+    resolveHost: resolvePublic,
+  });
+
+  await dispatcher.flush(20, fakeFetch);
+
+  assert.equal(captured[0].redirect, "manual");
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].input.error, "callback returned 302");
+});
+
+test("each row target is validated independently", async () => {
+  const rows = [
+    outboxRecord({ outbox_id: 1, target: "http://127.0.0.1/hook" }),
+    outboxRecord({ outbox_id: 2, target: "https://public.test/hook" }),
+  ];
+  const { store, failures, delivered } = callbackStore(rows);
+  const urls: string[] = [];
+  const fakeFetch = (async (url: string | URL | Request) => {
+    urls.push(String(url));
+    return new Response("ok", { status: 200 });
+  }) as typeof fetch;
+  const dispatcher = new OutboxDispatcher(store, "https://fallback.test/hook", "callback-secret", {
+    now: () => NOW,
+    resolveHost: resolvePublic,
+  });
+
+  assert.equal(await dispatcher.flush(20, fakeFetch), 1);
+  assert.deepEqual(urls, ["https://public.test/hook"]);
+  assert.deepEqual(delivered, [2]);
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0].id, 1);
+});
+
+test("private callback targets require an explicit opt-in", async () => {
+  const { store, failures, delivered } = callbackStore([outboxRecord({ target: "http://127.0.0.1/hook" })]);
+  let fetchCalls = 0;
+  const fakeFetch = (async () => {
+    fetchCalls += 1;
+    return new Response("ok", { status: 200 });
+  }) as typeof fetch;
+  const dispatcher = new OutboxDispatcher(store, "http://127.0.0.1/hook", "callback-secret", {
+    now: () => NOW,
+    allowPrivate: true,
+  });
+
+  assert.equal(await dispatcher.flush(20, fakeFetch), 1);
+  assert.equal(fetchCalls, 1);
+  assert.deepEqual(failures, []);
+  assert.deepEqual(delivered, [1]);
+});
+
+test("oversized callback responses are rejected", async () => {
+  const { store, failures, delivered } = callbackStore([outboxRecord()]);
+  const fakeFetch = (async () => new Response("x".repeat(200), {
+    status: 200,
+    headers: { "content-length": "200" },
+  })) as typeof fetch;
+  const dispatcher = new OutboxDispatcher(store, "https://public.test/hook", "callback-secret", {
+    now: () => NOW,
+    resolveHost: resolvePublic,
+    maxResponseBytes: 100,
+  });
+
+  await dispatcher.flush(20, fakeFetch);
+
+  assert.deepEqual(delivered, []);
+  assert.equal(failures.length, 1);
+  assert.match(failures[0].input.error, /callback response rejected: .*exceeded 100 bytes/);
 });

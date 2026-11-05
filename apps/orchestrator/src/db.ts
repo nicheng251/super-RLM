@@ -20,7 +20,7 @@ import type {
 
 type Row = Record<string, unknown>;
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   resume_message TEXT,
   delivered_to TEXT NOT NULL DEFAULT '[]',
   delivery_error TEXT,
+  cleanup_error TEXT,
   workspace_metadata TEXT,
   metadata_error TEXT,
   created_at TEXT NOT NULL,
@@ -273,6 +274,10 @@ export class Store {
       this.db.exec(OUTBOX_SCHEMA);
       return;
     }
+    if (version === 6) {
+      this.ensureColumn("tickets", "cleanup_error", "TEXT");
+      return;
+    }
     // Version 1 is the base schema above.
   }
 
@@ -314,9 +319,9 @@ export class Store {
         INSERT INTO tickets (
           ticket_id, task_id, title, prompt, profile, status, summary, result, artifacts, usage,
           error, question, session_key, session_ref, outcome, no_op, retry_count, not_before,
-          priority_next, resume_message, delivered_to, delivery_error, workspace_metadata,
-          metadata_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          priority_next, resume_message, delivered_to, delivery_error, cleanup_error,
+          workspace_metadata, metadata_error, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const ticket of tickets) {
         insertTicket.run(
@@ -328,7 +333,7 @@ export class Store {
           ticket.session_key, ticket.session_ref, ticket.outcome,
           ticket.no_op === null ? null : ticket.no_op ? 1 : 0,
           ticket.retry_count, ticket.not_before, ticket.priority_next ? 1 : 0, ticket.resume_message,
-          JSON.stringify(ticket.delivered_to), ticket.delivery_error,
+          JSON.stringify(ticket.delivered_to), ticket.delivery_error, ticket.cleanup_error,
           ticket.workspace_metadata === null ? null : JSON.stringify(ticket.workspace_metadata),
           ticket.metadata_error,
           ticket.created_at, ticket.updated_at,
@@ -677,6 +682,7 @@ function ticketFromRow(row: Row): TicketRecord {
     resume_message: row.resume_message === null ? null : String(row.resume_message),
     delivered_to: parseJson(row.delivered_to, []),
     delivery_error: row.delivery_error === null ? null : String(row.delivery_error),
+    cleanup_error: row.cleanup_error === null ? null : String(row.cleanup_error),
     workspace_metadata: row.workspace_metadata === null ? null : parseJson(row.workspace_metadata, null),
     metadata_error: row.metadata_error === null ? null : String(row.metadata_error),
     created_at: String(row.created_at),

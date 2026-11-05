@@ -56,3 +56,17 @@ test("help no longer lists background services or the standalone Router", () => 
   assert.doesNotMatch(response.stdout, /--no-services/);
   assert.doesNotMatch(response.stdout, /super-rlm \[router\]/);
 });
+
+test("the config command prints redacted token and key fields", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-main-config-"));
+  const response = spawnSync(process.execPath, [mainEntry, "config"], {
+    encoding: "utf8",
+    env: { ...process.env, SUPER_RLM_HOME: home },
+  });
+  assert.equal(response.status, 0);
+  const parsed = JSON.parse(response.stdout) as Record<string, unknown>;
+  assert.equal(parsed.routerToken, "[redacted]");
+  assert.equal(parsed.workerToken, "[redacted]");
+  assert.equal(parsed.callbackKey, "[redacted]");
+  assert.doesNotMatch(response.stdout, /[0-9a-f]{64}/);
+});

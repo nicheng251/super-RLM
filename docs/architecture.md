@@ -848,7 +848,7 @@ To get first-class pages, the project needs one of:
 
 The shell owns navigation, page lifecycle, focus, global keybindings, and the status bar. Pi Agent remains the engine behind the Chat page. The Orchestrator remains the source of task facts.
 
-The CLI should also keep a headless path (`super-rlm router`, `super-rlm monitor`) for scripts and automation.
+The CLI is TUI-first: `super-rlm` starts the TUI and owns the stack in a Windows Job. There is no background/headless `up` path; `status` and `down` remain for diagnostics and cleanup.
 
 "Role" in this document means a tool/permission profile inside the same CLI, not a separate agent, process, or model. Multiple profiles become useful only for multi-user or least-privilege deployments. The Orchestrator API can add scopes later without changing the domain model.
 

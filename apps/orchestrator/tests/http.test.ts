@@ -99,6 +99,7 @@ test("HTTP router and worker routes complete a ticket", async () => {
       artifacts: [],
       delivered_to: ["/tmp/user/launch/out.txt"],
       delivery_error: "one artifact was skipped",
+      cleanup_error: "ACP terminate: access denied",
       timestamp: new Date().toISOString(),
     });
     const unsigned = await fetch(`${base}/internal/v1/reports`, {
@@ -120,11 +121,13 @@ test("HTTP router and worker routes complete a ticket", async () => {
     });
     const result = await resultResponse.json() as {
       status: string; result: string; delivered_to: string[]; delivery_error: string | null;
+      cleanup_error: string | null;
     };
     assert.equal(result.status, "succeeded");
     assert.equal(result.result, "ok");
     assert.deepEqual(result.delivered_to, ["/tmp/user/launch/out.txt"]);
     assert.equal(result.delivery_error, "one artifact was skipped");
+    assert.equal(result.cleanup_error, "ACP terminate: access denied");
 
     const unauthorized = await fetch(`${base}/v1/tasks/${created.task_id}`);
     assert.equal(unauthorized.status, 401);

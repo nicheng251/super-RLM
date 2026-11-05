@@ -19,7 +19,7 @@ function seed(retryCount = 0) {
     status: "running", summary: null, result: null, artifacts: [], usage: null, error: null,
     question: null, session_key: "tkt_1", session_ref: null, outcome: null, no_op: null,
     retry_count: retryCount, not_before: null, priority_next: false, resume_message: null,
-    delivered_to: [], delivery_error: null, workspace_metadata: null, metadata_error: null,
+    delivered_to: [], delivery_error: null, cleanup_error: null, workspace_metadata: null, metadata_error: null,
     created_at: now, updated_at: now,
   };
   const assignment: AssignmentRecord = {

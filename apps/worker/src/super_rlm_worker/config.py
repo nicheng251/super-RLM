@@ -23,6 +23,52 @@ def _choice_env(source: dict[str, str], name: str, default: str, allowed: set[st
     return value
 
 
+LOOPBACK_HOSTS = {"127.0.0.1", "::1"}
+
+
+def loopback_host(value: str) -> str:
+    """Normalize and validate a listen host; only loopback addresses are allowed."""
+    host = value.strip().lower()
+    if not host:
+        raise ValueError("SUPER_RLM_WORKER_HOST must be 127.0.0.1 or ::1")
+    if host == "localhost":
+        return "127.0.0.1"
+    if host.startswith("[") and host.endswith("]"):
+        host = host[1:-1]
+    if host not in LOOPBACK_HOSTS:
+        raise ValueError(f"SUPER_RLM_WORKER_HOST must be 127.0.0.1 or ::1, got {value!r}")
+    return host
+
+
+TICKET_TEMP_KEYS = ("TEMP", "TMP", "PIP_CACHE_DIR", "NPM_CONFIG_CACHE", "XDG_CACHE_HOME")
+
+
+def ticket_temp_dir(home: Path, ticket_id: str) -> Path:
+    """Return the private scratch/cache directory for one Ticket."""
+    name = ticket_id.strip()
+    if (
+        not name
+        or name in {".", ".."}
+        or "/" in name
+        or "\\" in name
+        or ":" in name
+        or "\x00" in name
+    ):
+        raise ValueError(f"invalid ticket id for a temp directory: {ticket_id!r}")
+    return Path(home) / "tmp" / name
+
+
+def apply_ticket_temp_env(env: dict[str, str], home: Path, ticket_id: str) -> Path:
+    """Point temp and package-cache variables at a per-Ticket directory."""
+    directory = ticket_temp_dir(home, ticket_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    for key in [key for key in env if key.upper() in TICKET_TEMP_KEYS]:
+        del env[key]
+    for key in TICKET_TEMP_KEYS:
+        env[key] = str(directory)
+    return directory
+
+
 def _default_bash_shell() -> str | None:
     if os.name == "nt":
         candidate = Path("C:/Program Files/Git/bin/bash.exe")
@@ -100,7 +146,7 @@ class WorkerConfig:
             orchestrator_url=source.get("SUPER_RLM_ORCHESTRATOR_URL", "http://127.0.0.1:8787").rstrip("/"),
             worker_id=worker_id,
             worker_token=source.get("SUPER_RLM_WORKER_TOKEN", "dev-worker-token"),
-            host=source.get("SUPER_RLM_WORKER_HOST", "127.0.0.1"),
+            host=loopback_host(source.get("SUPER_RLM_WORKER_HOST", "127.0.0.1")),
             port=int(source.get("SUPER_RLM_WORKER_PORT", "8080")),
             max_concurrency=max(1, int(source.get("SUPER_RLM_MAX_CONCURRENCY", "2"))),
             home=home,
@@ -146,5 +192,6 @@ class WorkerConfig:
             self.workspace_root,
             self.session_root,
             self.daemon_socket_path.parent,
+            self.home / "tmp",
         ):
             path.mkdir(parents=True, exist_ok=True)

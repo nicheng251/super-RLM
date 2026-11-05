@@ -12,6 +12,7 @@ export interface AppConfig {
   workerToken: string;
   callbackUrl: string | null;
   callbackKey: string;
+  callbackAllowPrivate: boolean;
   projectRepo: string | null;
   maxConcurrentTickets: number;
   maxConcurrentTicketsPerTask: number;
@@ -19,10 +20,28 @@ export interface AppConfig {
   workerLeaseMs: number;
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1"]);
+
+/**
+ * Accept only a loopback listen address. "localhost" is normalized so the
+ * bound address is deterministic. Anything else (0.0.0.0, ::, LAN addresses,
+ * hostnames) would expose the unauthenticated-by-network control plane.
+ */
+export function validateLoopbackHost(value: string): string {
+  const host = value.trim().toLowerCase();
+  if (!host) throw new Error("SUPER_RLM_HOST must be 127.0.0.1 or ::1");
+  if (host === "localhost") return "127.0.0.1";
+  const bare = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (!LOOPBACK_HOSTS.has(bare)) {
+    throw new Error(`SUPER_RLM_HOST must be 127.0.0.1 or ::1, got ${JSON.stringify(value)}`);
+  }
+  return bare;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const home = env.SUPER_RLM_HOME ?? join(homedir(), ".super-rlm", "projects", "default");
   return {
-    host: env.SUPER_RLM_HOST ?? "127.0.0.1",
+    host: validateLoopbackHost(env.SUPER_RLM_HOST ?? "127.0.0.1"),
     port: Number(env.SUPER_RLM_PORT ?? "8787"),
     dbPath: env.SUPER_RLM_DB ?? join(home, "orchestrator", "orchestrator.sqlite"),
     workspaceRoot: env.SUPER_RLM_WORKSPACES ?? join(home, "workspaces"),
@@ -31,6 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     workerToken: env.SUPER_RLM_WORKER_TOKEN ?? "dev-worker-token",
     callbackUrl: env.SUPER_RLM_CALLBACK_URL?.trim() || null,
     callbackKey: env.SUPER_RLM_CALLBACK_KEY ?? "dev-callback-key",
+    callbackAllowPrivate: env.SUPER_RLM_CALLBACK_ALLOW_PRIVATE === "1",
     projectRepo: env.SUPER_RLM_PROJECT_REPO?.trim() || null,
     maxConcurrentTickets: Number(env.SUPER_RLM_MAX_CONCURRENT_TICKETS ?? "4"),
     maxConcurrentTicketsPerTask: Number(env.SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK ?? "2"),

@@ -215,6 +215,31 @@ test("completed reports persist generic workspace metadata", async () => {
   assert.equal(summary.metadata_error, "optional metadata warning");
 });
 
+test("cancelled reports persist the Worker cleanup error", async () => {
+  const { orchestrator } = harness();
+  const created = await orchestrator.createTask({
+    prompt: "cancel",
+    tickets: [{ title: "cancel", prompt: "cancel" }],
+  });
+  const ticketId = created.tickets[0].ticket_id;
+  const assignment = orchestrator.store.getActiveAssignment(ticketId);
+  assert.ok(assignment);
+
+  await orchestrator.handleReport(report(
+    ticketId, assignment.assignment_id, 1, "cancelled",
+    {
+      summary: "cancelled: worker shutdown",
+      cleanup_error: "stop_session: daemon unreachable",
+    },
+  ));
+
+  const result = orchestrator.getTicketResult(ticketId);
+  assert.equal(result.status, "cancelled");
+  assert.equal(result.cleanup_error, "stop_session: daemon unreachable");
+  const summary = orchestrator.getTask(created.task_id).tickets[0];
+  assert.equal(summary.cleanup_error, "stop_session: daemon unreachable");
+});
+
 test("dropped reports settle the ticket as a no-op success", async () => {
   const { orchestrator } = harness();
   const created = await orchestrator.createTask({
