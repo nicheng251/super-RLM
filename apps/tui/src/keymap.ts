@@ -18,7 +18,8 @@ export type Action =
   | { kind: "back" }
   | { kind: "abort" }
   | { kind: "scroll"; delta: number }
-  | { kind: "command" };
+  | { kind: "command" }
+  | { kind: "leader" };
 
 export interface KeyContext {
   view: ViewName;
@@ -38,6 +39,14 @@ const VIEW_KEYS = [
   ["f4", "workers"],
   ["f5", "events"],
 ] as const satisfies readonly (readonly [string, ViewName])[];
+
+const ALT_DIGIT_VIEWS: Record<string, ViewName> = {
+  "\x1b1": "chat",
+  "\x1b2": "tasks",
+  "\x1b3": "detail",
+  "\x1b4": "workers",
+  "\x1b5": "events",
+};
 
 const CTRL_DIGIT_VIEWS: Record<string, ViewName> = {
   "1": "chat",
@@ -61,6 +70,9 @@ function ctrlDigitView(data: string): ViewName | null {
 /** Maps one raw terminal chunk to an app action. Unmapped input reaches the focused component. */
 export function mapKey(data: string, context: KeyContext): Action | null {
   if (matchesKey(data, Key.ctrl("c"))) return { kind: "exit" };
+  if (matchesKey(data, Key.ctrl("k"))) return { kind: "leader" };
+  const altDigit = ALT_DIGIT_VIEWS[data];
+  if (altDigit) return { kind: "view", view: altDigit };
   for (const [key, view] of VIEW_KEYS) {
     if (matchesKey(data, key)) return { kind: "view", view };
   }

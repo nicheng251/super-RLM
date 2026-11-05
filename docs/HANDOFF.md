@@ -28,7 +28,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v5，迁移前自动备份）；44 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；47 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands 和 delivery 测试）。
 - `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles/tui` 可用；30 个 `node:test` 通过；`up/status/down` 已手动验证。
-- 当前单元/集成测试合计 167 个：protocol 26、orchestrator 44、worker 47、cli 30、router 2、tui 18。
+- 当前单元/集成测试合计 168 个：protocol 26、orchestrator 44、worker 47、cli 30、router 2、tui 19。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
 - 已用真实 DeepSeek `deepseek-flash` 跑通：写文件任务成功（`hello.txt` 内容正确），以及 TUI 中 `/tasks` -> Task Detail -> 回答 -> resume -> succeeded。
@@ -46,7 +46,7 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - 已实现 durable outbox + 用户 callback HMAC：重要事件入 outbox，后台投递，HMAC-SHA256(timestamp+nonce+body)，失败按 2/5/15/60/300 秒重试，8 次后标记 failed。
 - 已用本地 callback receiver 验证 v4->v5 自动备份、outbox 投递和签名校验（`docs/spikes/callback-outbox-e2e.md`）。
 - 已实现 L3 TUI 垂直切片：`apps/tui` 使用 `@earendil-works/pi-tui` + Pi RpcClient，包含 Chat、Tasks、Task Detail、Workers、Events；CLI 新增 `super-rlm tui`。
-- L3 使用 Ctrl+1..5 切换视图（兼容 Kitty / xterm modifyOtherKeys 编码；不支持的终端用 F1..F5 或 `/` 命令）；Tab 激活已移除。输入 `/` 会显示命令自动补全和提示。
+- L3 使用 Ctrl+1..5 切换视图（兼容 Kitty / xterm modifyOtherKeys 编码；不支持的终端用 F1..F5、Alt+1..5、Ctrl+K 后 1..5 或 `/` 命令）；Tab 激活已移除。输入 `/` 会显示命令自动补全和提示。
 - Router SSE 在 session_start 时从 `/v1/events/latest` 开始，不再在每次进入时重放旧通知。
 - L3 Tasks 增加 filter/search：`/filter all|waiting|running|terminal`、`/search <text>`、`/clear`，Tasks 主区域 `f` 循环过滤。
 - 已用真实 DeepSeek 跑通 L3 Chat E2E：Pi RPC Chat -> task_create -> Worker -> artifact delivery；Task `tsk_3ad4882b3493458ab949` succeeded（`docs/spikes/l3-chat-e2e.md`）。

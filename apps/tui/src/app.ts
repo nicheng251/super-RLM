@@ -45,7 +45,7 @@ import {
 import { bold, cyan, dim, gray, green, red, yellow } from "./ui/theme.ts";
 
 const FOOTER_HELP: Record<ViewName, string> = {
-  chat: "Enter send/steer \u00b7 / commands \u00b7 Esc abort \u00b7 ^1-5 views \u00b7 ^C exit",
+  chat: "Enter send/steer \u00b7 / commands \u00b7 ^K then 1-5 or F1-F5 views \u00b7 ^C exit",
   tasks: "j/k select \u00b7 Enter detail \u00b7 f filter \u00b7 r refresh \u00b7 Esc chat",
   detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 q back \u00b7 r refresh",
   workers: "j/k scroll \u00b7 r refresh \u00b7 Esc chat",
@@ -81,6 +81,7 @@ export class TuiApp {
 
   private readonly chatLines: ChatLine[] = [];
   private focus: FocusArea = "editor";
+  private leader = false;
   private mainScroll: ScrollView | null = null;
   private stream: OrchestratorEventStream | null = null;
   private rpc: RpcClient | null = null;
@@ -162,6 +163,17 @@ export class TuiApp {
   }
 
   private handleGlobalInput(data: string): { consume?: boolean } | undefined {
+    if (this.leader) {
+      this.leader = false;
+      if (data === "\x1b") {
+        this.flash("view switch cancelled");
+        return { consume: true };
+      }
+      const view = ({ "1": "chat", "2": "tasks", "3": "detail", "4": "workers", "5": "events" } as const)[data as "1"];
+      if (view) this.openView(view);
+      else this.flash("View: 1 Chat · 2 Tasks · 3 Detail · 4 Workers · 5 Events");
+      return { consume: true };
+    }
     const action = mapKey(data, { view: this.state.view, focus: this.focus, piRunning: this.piRunning });
     if (!action) return undefined;
     void this.runAction(action);
@@ -228,6 +240,10 @@ export class TuiApp {
         return;
       case "command":
         this.openCommandMode();
+        return;
+      case "leader":
+        this.leader = true;
+        this.flash("View: 1 Chat · 2 Tasks · 3 Detail · 4 Workers · 5 Events");
         return;
     }
   }
@@ -568,6 +584,7 @@ export class TuiApp {
       await client.start();
       this.state.health.pi = "idle";
       this.pushChat({ kind: "system", text: "Pi Router ready." });
+      this.pushChat({ kind: "system", text: "Views: Ctrl+1..5 when reported, F1..F5, Ctrl+K then 1..5, or /commands." });
     } catch (error) {
       this.state.health.pi = "error";
       this.pushChat({ kind: "error", text: `Pi failed to start: ${messageOf(error)}` });

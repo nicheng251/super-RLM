@@ -37,8 +37,9 @@ right, and the Chat editor spanning the full terminal width at the bottom.
   absent).
 - **Events** - SSE `GET /v1/events?after=<cursor>` with reconnect and backoff.
 
-Ctrl+1..5 jump to a view; F1..F5 are a fallback for terminals that do not
-report Ctrl+digit. Ctrl+C exits. The Chat editor autocompletes slash commands.
+Ctrl+1..5 jump to a view. F1..F5, Alt+1..5, and Ctrl+K followed by 1..5 are
+fallbacks for terminals that do not report Ctrl+digit. Ctrl+C exits. The Chat
+editor autocompletes slash commands.
 
 ## Notes
 

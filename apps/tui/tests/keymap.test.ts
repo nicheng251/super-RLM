@@ -45,6 +45,12 @@ test("navigation and ticket actions depend on the active view", () => {
   assert.deepEqual(mapKey("j", workers), { kind: "scroll", delta: 1 });
 });
 
+test("Ctrl+K leader and Alt+digit switch views", () => {
+  assert.deepEqual(mapKey("\x0b", base), { kind: "leader" });
+  assert.deepEqual(mapKey("\x1b2", base), { kind: "view", view: "tasks" });
+  assert.deepEqual(mapKey("\x1b5", base), { kind: "view", view: "events" });
+});
+
 test("slash opens command mode; f filters Tasks", () => {
   const tasks: KeyContext = { view: "tasks", focus: "main", piRunning: false };
   assert.deepEqual(mapKey("/", tasks), { kind: "command" });
