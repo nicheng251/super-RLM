@@ -17,6 +17,11 @@ or, once services are up:
 super-rlm tui
 ```
 
+## Layout
+
+Status bar at the top, main content/Chat on the left, the view sidebar on the
+right, and the Chat editor spanning the full terminal width at the bottom.
+
 ## Views
 
 - **Chat** - Pi Router session over RPC. Enter sends; while a turn runs, Enter

@@ -44,6 +44,20 @@ apps/router/src/page-model.ts
 apps/cli/src/config.ts
 ```
 
+## Layout
+
+```text
+status bar
+┌──────────────────────────────────────┬──────────────┐
+│ main content / Chat transcript       │ sidebar      │
+└──────────────────────────────────────┴──────────────┘
+help line
+full-width Chat editor
+```
+
+The editor spans the terminal width at the bottom. Chat and task content are
+on the left; the view sidebar is on the right.
+
 ## Views
 
 - Chat: Pi RPC transcript, streaming text, tool calls, abort/steer.

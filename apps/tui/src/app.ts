@@ -7,6 +7,7 @@ import {
   TuiAltScreen,
   VStack,
   type EditorTheme,
+  type StackChild,
 } from "@earendil-works/pi-tui";
 import { RpcClient, type JsonAgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
@@ -321,25 +322,32 @@ export class TuiApp {
 
   private rebuildLayout(): void {
     this.mainScroll = null;
-    const main = this.state.view === "chat" ? this.buildChatView() : this.buildMainScroll();
+    const chat = this.state.view === "chat";
+    const main = chat ? this.buildChatView() : this.buildMainScroll();
+    // Content on the left; navigation/sidebar on the right.
     const body = new HStack([
-      { component: this.sidebar, basis: 26, shrink: 0, minSize: 20, maxSize: 32 },
       { component: main, basis: 0, grow: 1, minSize: 20 },
+      { component: this.sidebar, basis: 26, shrink: 0, minSize: 20, maxSize: 32 },
     ], { gap: 1 });
-    this.tui.setLayoutRoot(new VStack([
+    const root: StackChild[] = [
       { component: this.statusBar, basis: "auto", shrink: 0, minSize: 1, maxSize: 1 },
       { component: body, basis: 0, grow: 1, minSize: 3 },
-      { component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: 2 },
-    ]));
+    ];
+    if (chat) {
+      // Help line above the input so the editor spans the full bottom row.
+      root.push({ component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: 1 });
+      root.push({ component: this.editor, basis: "auto", shrink: 0, minSize: 1 });
+    } else {
+      root.push({ component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: 2 });
+    }
+    this.tui.setLayoutRoot(new VStack(root));
     this.updateFooter();
   }
 
-  private buildChatView(): VStack {
+  private buildChatView(): ScrollView {
     const scroll = new ScrollView(this.chatPane, { follow: "end", primary: true });
-    return new VStack([
-      { component: scroll, basis: 0, grow: 1, minSize: 1 },
-      { component: this.editor, basis: "auto", shrink: 0, minSize: 1 },
-    ]);
+    this.mainScroll = scroll;
+    return scroll;
   }
 
   private buildMainScroll(): ScrollView {
