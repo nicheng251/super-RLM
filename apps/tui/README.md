@@ -73,8 +73,9 @@ command mode:
 `/model` opens a full-screen two-stage Model & Profiles page. On the Profile
 page, Up/Down selects and Enter opens model selection; Esc closes. On the model
 page, Up/Down selects a model, Left/Right adjusts thinking, Enter applies and
-stays, and Esc returns to the Profile page. The page hides Chat and the sidebar
-and disables Alt+1..4 while open. Router changes apply to the current session;
+returns to the Profile page, and Esc returns without applying. The page hides
+Chat and the sidebar but keeps the Chat input box visible at the bottom, and
+disables Alt+1..4 while open. Router changes apply to the current session;
 Worker profile changes persist to
 `<SUPER_RLM_HOME>/profiles.overrides.json`.
 

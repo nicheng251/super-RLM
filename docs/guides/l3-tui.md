@@ -109,7 +109,7 @@ Slash commands:
 ```
 
 `/model` opens a full-screen Model & Profiles page. It hides Chat and the
-sidebar while open. Old text forms such as `/model list` and
+sidebar while open, but keeps the Chat input box visible at the bottom. Old text forms such as `/model list` and
 `/model thinking <level>` are not supported.
 
 Profile page:
@@ -139,11 +139,12 @@ Thinking: ← medium →   ctx:1M
 ```text
 Up/Down   select model
 Left/Right adjust thinking level
-Enter     apply and stay on the model page
-Esc       return to the Profile page
+Enter     apply and return to the Profile page
+Esc       return to the Profile page without applying
 ```
 
-While either page is open, Alt+1..4 view switching is disabled.
+While either page is open, Alt+1..4 view switching is disabled, and the input
+box is not focused.
 Router changes apply to the current Router session. Worker profile changes are
 saved under `<SUPER_RLM_HOME>/profiles.overrides.json` and apply to subsequent
 Tickets without restarting the Orchestrator. `config/profiles.yaml` remains the

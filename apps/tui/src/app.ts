@@ -376,6 +376,7 @@ export class TuiApp {
               thinking: asThinking(this.routerThinking),
               contextWindow: this.routerContextWindow,
             });
+            selector.showProfiles();
             selector.setNotice(`Applied Router: ${this.routerModelName} · thinking:${this.routerThinking}`);
           } else {
             const updated = await this.api.updateProfile(choice.key, {
@@ -390,6 +391,7 @@ export class TuiApp {
               thinking: updated.thinking,
               contextWindow: lookupModelInfo(this.config.modelsConfigPath, updated.provider, updated.model)?.contextWindow ?? null,
             });
+            selector.showProfiles();
             selector.setNotice(`Applied ${choice.label}: ${updated.provider}/${updated.model} · thinking:${updated.thinking}`);
             this.refreshViews();
           }
@@ -457,7 +459,10 @@ export class TuiApp {
   private rebuildLayout(): void {
     this.mainScroll = null;
     if (this.modelSelectorOpen && this.modelSelector) {
-      this.tui.setLayoutRoot(new VStack([{ component: this.modelSelector, basis: 0, grow: 1, minSize: 1 }]));
+      this.tui.setLayoutRoot(new VStack([
+        { component: this.modelSelector, basis: 0, grow: 1, minSize: 3 },
+        { component: this.editor, basis: "auto", shrink: 0, minSize: 1 },
+      ]));
       this.tui.setFocus(this.modelSelector);
       return;
     }

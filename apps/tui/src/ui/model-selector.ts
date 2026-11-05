@@ -116,6 +116,11 @@ export class ModelSelector implements Component, Focusable {
     this.changed();
   }
 
+  showProfiles(): void {
+    this.stage = "profiles";
+    this.changed();
+  }
+
   updateProfile(key: string, patch: Partial<SelectorProfile>): void {
     const profile = this.profiles.find((entry) => entry.key === key);
     if (profile) Object.assign(profile, patch);

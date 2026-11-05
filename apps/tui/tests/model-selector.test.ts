@@ -22,17 +22,17 @@ test("left/right adjusts thinking on the model page", () => {
   assert.equal(selector.profiles[0].thinking, "high");
 });
 
-test("Enter opens model selection, Up/Down picks a model, Enter applies and stays", () => {
+test("Enter opens model selection, Up/Down picks a model, Enter applies and returns to profiles", () => {
   const selector = new ModelSelector(profiles, models);
   const applied: SelectorProfile[] = [];
-  selector.onApply = (profile) => { applied.push(profile); };
+  selector.onApply = (profile) => { applied.push(profile); selector.showProfiles(); };
   selector.handleInput("\r");
   assert.equal(selector.stage, "model");
   selector.handleInput("\x1b[B");
   selector.handleInput("\r");
   assert.equal(applied[0]?.model, "deepseek-pro");
   assert.equal(applied[0]?.contextWindow, 2097152);
-  assert.equal(selector.stage, "model");
+  assert.equal(selector.stage, "profiles");
 });
 
 test("Esc goes back one level, then closes", () => {
