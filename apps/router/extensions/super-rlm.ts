@@ -87,8 +87,29 @@ function eventText(event: SuperRlmEvent): string {
   return `${task} ${status}. Use task_status or ticket_result to read the result.`;
 }
 
-async function runEventLoop(pi: ExtensionAPI, signal: AbortSignal): Promise<void> {
-  let cursor = 0;
+async function latestEventCursor(): Promise<number> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2_000);
+    try {
+      const response = await fetch(`${BASE}/v1/events/latest`, {
+        headers: { authorization: `Bearer ${TOKEN}` },
+        signal: controller.signal,
+      });
+      if (!response.ok) return 0;
+      const body = await response.json() as { event_id?: unknown };
+      const value = Number(body.event_id);
+      return Number.isFinite(value) ? value : 0;
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return 0;
+  }
+}
+
+async function runEventLoop(pi: ExtensionAPI, signal: AbortSignal, startCursor = 0): Promise<void> {
+  let cursor = startCursor;
   let lastNotify = 0;
   while (!signal.aborted) {
     try {
@@ -336,7 +357,10 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async () => {
     eventAbort?.abort();
     eventAbort = new AbortController();
-    void runEventLoop(pi, eventAbort.signal);
+    // Start at the current event head so opening a fresh Router session does
+    // not replay old waiting/settled notifications.
+    const cursor = await latestEventCursor();
+    void runEventLoop(pi, eventAbort.signal, cursor);
   });
   pi.on("session_shutdown", async () => {
     eventAbort?.abort();

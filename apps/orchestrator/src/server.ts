@@ -125,6 +125,10 @@ async function routeRouter(
     return sendJson(res, 200, await orchestrator.waitForTask(segments[2], Number.isFinite(timeout) ? timeout : 120));
   }
 
+  if (method === "GET" && url.pathname === "/v1/events/latest") {
+    return sendJson(res, 200, { event_id: orchestrator.latestEventId() });
+  }
+
   if (method === "GET" && url.pathname === "/v1/events") {
     return streamEvents(req, res, orchestrator, undefined, Number(url.searchParams.get("after") ?? "0"));
   }

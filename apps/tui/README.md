@@ -32,8 +32,8 @@ super-rlm tui
   absent).
 - **Events** - SSE `GET /v1/events?after=<cursor>` with reconnect and backoff.
 
-Ctrl+1..5 jump to a view, Tab moves focus between the sidebar and the main area,
-Ctrl+C exits.
+Ctrl+1..5 jump to a view; F1..F5 are a fallback for terminals that do not
+report Ctrl+digit. Ctrl+C exits. The Chat editor autocompletes slash commands.
 
 ## Notes
 

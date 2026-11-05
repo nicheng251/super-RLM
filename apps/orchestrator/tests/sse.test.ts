@@ -42,6 +42,13 @@ test("SSE streams task events with cursors", async () => {
       prompt: "sse task",
       tickets: [{ title: "sse", prompt: "do it" }],
     });
+    const latest = await fetch(`${base}/v1/events/latest`, {
+      headers: { authorization: "Bearer router-token" },
+    });
+    assert.equal(latest.status, 200);
+    const latestBody = await latest.json() as { event_id: number };
+    assert.ok(latestBody.event_id > 0);
+
     const response = await fetch(`${base}/v1/events?after=0`, {
       headers: { authorization: "Bearer router-token" },
       signal: controller.signal,

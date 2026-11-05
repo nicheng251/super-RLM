@@ -57,6 +57,7 @@ apps/cli/src/config.ts
 
 ```text
 Ctrl+1..5     switch Chat/Tasks/Detail/Workers/Events
+F1..F5        fallback view switch
 /             command mode (or type /command in Chat)
 Ctrl+C        exit
 Esc           back / abort Chat turn
@@ -71,9 +72,9 @@ r             refresh
 ```
 
 Ctrl+digit is recognized from Kitty, xterm modifyOtherKeys, and common
-modified-key encodings. If a terminal does not report Ctrl+digit at all, use the
-slash commands (`/tasks`, `/workers`, etc.); the Chat editor autocompletes
-commands after `/`.
+modified-key encodings. Some Windows terminals do not report Ctrl+digit at all;
+use F1..F5 or the slash commands (`/tasks`, `/workers`, etc.). The Chat editor
+autocompletes commands after `/`.
 
 Slash commands:
 

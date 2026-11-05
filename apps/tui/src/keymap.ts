@@ -26,6 +26,19 @@ export interface KeyContext {
   piRunning: boolean;
 }
 
+const VIEW_KEYS = [
+  ["ctrl+1", "chat"],
+  ["ctrl+2", "tasks"],
+  ["ctrl+3", "detail"],
+  ["ctrl+4", "workers"],
+  ["ctrl+5", "events"],
+  ["f1", "chat"],
+  ["f2", "tasks"],
+  ["f3", "detail"],
+  ["f4", "workers"],
+  ["f5", "events"],
+] as const satisfies readonly (readonly [string, ViewName])[];
+
 const CTRL_DIGIT_VIEWS: Record<string, ViewName> = {
   "1": "chat",
   "2": "tasks",
@@ -48,6 +61,9 @@ function ctrlDigitView(data: string): ViewName | null {
 /** Maps one raw terminal chunk to an app action. Unmapped input reaches the focused component. */
 export function mapKey(data: string, context: KeyContext): Action | null {
   if (matchesKey(data, Key.ctrl("c"))) return { kind: "exit" };
+  for (const [key, view] of VIEW_KEYS) {
+    if (matchesKey(data, key)) return { kind: "view", view };
+  }
   const ctrlDigit = ctrlDigitView(data);
   if (ctrlDigit) return { kind: "view", view: ctrlDigit };
 

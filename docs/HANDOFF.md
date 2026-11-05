@@ -46,7 +46,8 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - 已实现 durable outbox + 用户 callback HMAC：重要事件入 outbox，后台投递，HMAC-SHA256(timestamp+nonce+body)，失败按 2/5/15/60/300 秒重试，8 次后标记 failed。
 - 已用本地 callback receiver 验证 v4->v5 自动备份、outbox 投递和签名校验（`docs/spikes/callback-outbox-e2e.md`）。
 - 已实现 L3 TUI 垂直切片：`apps/tui` 使用 `@earendil-works/pi-tui` + Pi RpcClient，包含 Chat、Tasks、Task Detail、Workers、Events；CLI 新增 `super-rlm tui`。
-- L3 使用 Ctrl+1..5 切换视图（兼容 Kitty / xterm modifyOtherKeys 编码）；Tab 激活已移除。输入 `/` 会显示命令自动补全和提示。
+- L3 使用 Ctrl+1..5 切换视图（兼容 Kitty / xterm modifyOtherKeys 编码；不支持的终端用 F1..F5 或 `/` 命令）；Tab 激活已移除。输入 `/` 会显示命令自动补全和提示。
+- Router SSE 在 session_start 时从 `/v1/events/latest` 开始，不再在每次进入时重放旧通知。
 - L3 Tasks 增加 filter/search：`/filter all|waiting|running|terminal`、`/search <text>`、`/clear`，Tasks 主区域 `f` 循环过滤。
 - 已用真实 DeepSeek 跑通 L3 Chat E2E：Pi RPC Chat -> task_create -> Worker -> artifact delivery；Task `tsk_3ad4882b3493458ab949` succeeded（`docs/spikes/l3-chat-e2e.md`）。
 - 已新增 `GET /v1/workers` 和 WorkerView 协议，TUI Workers 页可用。

@@ -313,6 +313,10 @@ export class Orchestrator {
     };
   }
 
+  latestEventId(): number {
+    return this.store.latestEventId();
+  }
+
   getTask(taskId: string): TaskView {
     const { task, tickets } = this.refreshTask(taskId);
     return taskView({ task, tickets, workspaceRoot: this.config.workspaceRoot });

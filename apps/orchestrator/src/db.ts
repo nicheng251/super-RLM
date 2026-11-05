@@ -560,6 +560,12 @@ export class Store {
     return Number(result.lastInsertRowid);
   }
 
+  latestEventId(): number {
+    const row = this.db.prepare("SELECT MAX(event_id) AS id FROM events").get() as Row | undefined;
+    const value = Number(row?.id ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  }
+
   listEvents(taskId?: string, after = 0, limit = 100): Array<Record<string, unknown>> {
     const rows = taskId
       ? this.db.prepare("SELECT * FROM events WHERE task_id = ? AND event_id > ? ORDER BY event_id ASC LIMIT ?").all(taskId, after, limit)
