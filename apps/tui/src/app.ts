@@ -14,6 +14,7 @@ import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model
 import type { TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
+import { COMMAND_HELP, parseSlashCommand, viewForCommand } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
 import {
   addEvent,
@@ -38,7 +39,7 @@ import {
 import { bold, cyan, dim, gray, green, red, yellow } from "./ui/theme.ts";
 
 const FOOTER_HELP: Record<ViewName, string> = {
-  chat: "Enter send/steer \u00b7 Esc abort \u00b7 Tab sidebar \u00b7 ^1-5 views \u00b7 ^C exit",
+  chat: "Enter send/steer \u00b7 / commands \u00b7 Esc abort \u00b7 Tab sidebar \u00b7 ^C exit",
   tasks: "j/k select \u00b7 Enter detail \u00b7 r refresh \u00b7 Esc chat",
   detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 q back \u00b7 r refresh",
   workers: "j/k scroll \u00b7 r refresh \u00b7 Esc chat",
@@ -208,6 +209,56 @@ export class TuiApp {
       case "abort":
         await this.abortTurn();
         return;
+      case "command":
+        this.openCommandMode();
+        return;
+    }
+  }
+
+  private openCommandMode(): void {
+    this.openView("chat");
+    this.editor.setText("/");
+    this.setFocus("editor");
+    this.flash("Command mode: type /help for commands");
+  }
+
+  private async runSlashCommand(input: string): Promise<void> {
+    const command = parseSlashCommand(input);
+    if (!command) return;
+    if (command.name === "unknown") {
+      this.pushChat({ kind: "error", text: `Unknown command: ${command.raw} · /help` });
+      return;
+    }
+    if (command.name === "help") {
+      this.pushChat({ kind: "system", text: "Commands:" });
+      for (const line of COMMAND_HELP) this.pushChat({ kind: "system", text: `  ${line}` });
+      return;
+    }
+    const view = viewForCommand(command);
+    if (view) {
+      this.openView(view);
+      return;
+    }
+    switch (command.name) {
+      case "detail":
+        if (command.taskId) this.openDetail(command.taskId);
+        else this.openView("detail");
+        return;
+      case "refresh":
+        await this.refreshCurrent();
+        return;
+      case "abort":
+        await this.abortTurn();
+        return;
+      case "quit":
+        await this.shutdown(0);
+        return;
+      case "answer": {
+        const ticket = this.currentTicket();
+        if (ticket?.question) this.showAnswerDialog(ticket);
+        else this.flash("No waiting question on the selected ticket.");
+        return;
+      }
     }
   }
 
@@ -481,6 +532,12 @@ export class TuiApp {
     const message = text.trim();
     if (!message) return;
     this.editor.setText("");
+    if (message.startsWith("/")) {
+      await this.runSlashCommand(message);
+      this.editor.addToHistory(message);
+      this.tui.requestRender();
+      return;
+    }
     this.pushChat({ kind: "user", text: message });
     this.assistantOpen = false;
     if (!this.rpc) {

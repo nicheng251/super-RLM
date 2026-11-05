@@ -37,3 +37,11 @@ test("navigation and ticket actions depend on the active view", () => {
   const workers: KeyContext = { view: "workers", focus: "main", piRunning: false };
   assert.deepEqual(mapKey("j", workers), { kind: "scroll", delta: 1 });
 });
+
+test("slash opens command mode and sidebar digits switch views", () => {
+  const tasks: KeyContext = { view: "tasks", focus: "main", piRunning: false };
+  assert.deepEqual(mapKey("/", tasks), { kind: "command" });
+  const sidebar: KeyContext = { view: "tasks", focus: "sidebar", piRunning: false };
+  assert.deepEqual(mapKey("4", sidebar), { kind: "view", view: "workers" });
+  assert.deepEqual(mapKey("/", sidebar), { kind: "command" });
+});

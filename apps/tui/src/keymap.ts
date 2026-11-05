@@ -16,7 +16,8 @@ export type Action =
   | { kind: "refresh" }
   | { kind: "back" }
   | { kind: "abort" }
-  | { kind: "scroll"; delta: number };
+  | { kind: "scroll"; delta: number }
+  | { kind: "command" };
 
 export interface KeyContext {
   view: ViewName;
@@ -30,7 +31,20 @@ const VIEW_KEYS = [
   ["ctrl+3", "detail"],
   ["ctrl+4", "workers"],
   ["ctrl+5", "events"],
+  ["alt+1", "chat"],
+  ["alt+2", "tasks"],
+  ["alt+3", "detail"],
+  ["alt+4", "workers"],
+  ["alt+5", "events"],
 ] as const satisfies readonly (readonly [string, ViewName])[];
+
+const SIDEBAR_VIEW_KEYS: Record<string, ViewName> = {
+  "1": "chat",
+  "2": "tasks",
+  "3": "detail",
+  "4": "workers",
+  "5": "events",
+};
 
 /** Maps one raw terminal chunk to an app action. Unmapped input reaches the focused component. */
 export function mapKey(data: string, context: KeyContext): Action | null {
@@ -44,8 +58,14 @@ export function mapKey(data: string, context: KeyContext): Action | null {
     if (matchesKey(data, Key.escape) && context.piRunning) return { kind: "abort" };
     return null;
   }
-  if (context.focus === "sidebar") return null;
+  if (context.focus === "sidebar") {
+    const view = SIDEBAR_VIEW_KEYS[data];
+    if (view) return { kind: "view", view };
+    if (matchesKey(data, "/")) return { kind: "command" };
+    return null;
+  }
 
+  if (matchesKey(data, "/")) return { kind: "command" };
   if (matchesKey(data, Key.tab)) return { kind: "focus", area: "sidebar" };
   if (matchesKey(data, Key.escape)) {
     if (context.view === "chat") return null;

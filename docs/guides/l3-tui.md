@@ -57,9 +57,11 @@ apps/cli/src/config.ts
 
 ```text
 Ctrl+1..5     switch Chat/Tasks/Detail/Workers/Events
+Alt+1..5      fallback view switch
+Tab           focus sidebar; digits 1..5 switch there
+/             command mode (or type /command in Chat)
 Ctrl+C        exit
 Esc           back / abort Chat turn
-Tab           focus sidebar or editor
 j / k         move
 Enter         send Chat / open Task
 a             answer waiting Ticket
@@ -71,7 +73,23 @@ r             refresh
 ```
 
 Ctrl+digit depends on Kitty keyboard protocol support. On legacy terminals use
-the sidebar (Tab + j/k + Enter).
+`/tasks`, `/workers`, etc., Alt+digit when the terminal reports it, or Tab to
+the sidebar and press 1..5.
+
+Slash commands:
+
+```text
+/chat
+/tasks
+/detail [task_id]
+/workers
+/events
+/refresh
+/answer
+/abort
+/quit
+/help
+```
 
 ## Limitations
 

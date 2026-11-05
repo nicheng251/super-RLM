@@ -41,3 +41,25 @@ Ctrl+C exits.
   either app.
 - Pi stderr is captured while the app owns the alternate screen so
   child-process diagnostics do not corrupt the display.
+
+
+## Commands
+
+Type a slash command in the Chat editor, or press `/` from another view to open
+command mode:
+
+```text
+/chat
+/tasks
+/detail [task_id]
+/workers
+/events
+/refresh
+/answer
+/abort
+/quit
+/help
+```
+
+`Alt+1..5` and, with the sidebar focused, `1..5` also switch views when a
+terminal does not report Ctrl+digit.
