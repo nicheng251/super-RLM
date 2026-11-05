@@ -178,8 +178,16 @@ It also shows the TUI supervisor PID while a TUI-owned stack is running.
 
 `down` first terminates a running TUI supervisor. Closing its Job removes the
 TUI and all of its children, including the Prime Agent daemon. It then stops any
-leftover Worker and Orchestrator, removes their PID files, and runs
-`prime-agent shutdown --force` for the project daemon.
+leftover Worker and Orchestrator, removes their PID files, rotates their closed
+logs, and runs `prime-agent shutdown --force` for the project daemon.
+
+Starting the TUI also performs startup maintenance after confirming that the
+stack is down: it rotates `orchestrator/orchestrator.log` and
+`worker/worker.log` when they exceed `SUPER_RLM_LOG_MAX_BYTES` (default
+10 MiB), keeping `SUPER_RLM_LOG_KEEP` rotations (default 3). It then runs
+`gc --apply` for resources older than `SUPER_RLM_GC_OLDER_THAN_DAYS` (default
+7). Set `SUPER_RLM_AUTO_MAINTENANCE=0` to skip the startup GC; log rotation
+still runs. Maintenance is best effort and never runs while the stack is up.
 
 The supervisor starts:
 

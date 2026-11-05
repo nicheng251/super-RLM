@@ -111,6 +111,7 @@ test("runTui builds and starts the Job supervisor plan when the stack is idle", 
   const code = await runTui(config, {
     platform: "win32",
     detect: async () => stack(),
+    maintain: async () => ({ ran: true, rotated: [], gcCode: null, errors: [] }),
     start: async (built) => {
       plan = built;
       return 0;
@@ -120,6 +121,58 @@ test("runTui builds and starts the Job supervisor plan when the stack is idle", 
   assert.ok(plan && typeof plan === "object");
   assert.equal((plan as { tui_child: string }).tui_child, "tui");
   assert.equal((plan as { children: unknown[] }).children.length, 3);
+});
+
+test("runTui runs startup maintenance before starting the supervisor", async () => {
+  const config = loadConfig({
+    env: { SUPER_RLM_HOME: mkdtempSync(join(tmpdir(), "super-rlm-tui-")) },
+    cwd: tmpdir(),
+  });
+  const events: string[] = [];
+  const code = await runTui(config, {
+    platform: "win32",
+    detect: async () => stack(),
+    maintain: async (received) => {
+      events.push("maintain");
+      assert.equal(received, config);
+      return { ran: true, rotated: [], gcCode: null, errors: [] };
+    },
+    start: async () => {
+      events.push("start");
+      return 0;
+    },
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(events, ["maintain", "start"]);
+});
+
+test("runTui continues when startup maintenance throws", async () => {
+  const config = loadConfig({
+    env: { SUPER_RLM_HOME: mkdtempSync(join(tmpdir(), "super-rlm-tui-")) },
+    cwd: tmpdir(),
+  });
+  let started = false;
+  const originalError = console.error;
+  const stderr: string[] = [];
+  console.error = (...args: unknown[]) => { stderr.push(args.map(String).join(" ")); };
+  try {
+    const code = await runTui(config, {
+      platform: "win32",
+      detect: async () => stack(),
+      maintain: async () => {
+        throw new Error("maintenance unavailable");
+      },
+      start: async () => {
+        started = true;
+        return 0;
+      },
+    });
+    assert.equal(code, 0);
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(started, true);
+  assert.match(stderr.join("\n"), /startup maintenance failed: maintenance unavailable; continuing/);
 });
 
 test("runTui fails closed when the Windows Job API is unavailable", async () => {

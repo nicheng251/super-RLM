@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { ensureDirs, routerEnv, type CliConfig } from "../config.ts";
+import { runStartupMaintenance, type StartupMaintenanceOptions, type StartupMaintenanceResult } from "../maintenance.ts";
 import { detectRunningStack, describeRunningStack, hasRunningStack, type RunningStack } from "../supervisor/detect.ts";
 import { buildSupervisorPlan, type SupervisorPlan } from "../supervisor/plan.ts";
 import { runSupervisor } from "../supervisor/run.ts";
@@ -9,6 +10,10 @@ import { runSupervisor } from "../supervisor/run.ts";
 export interface RunTuiOptions {
   platform?: NodeJS.Platform;
   detect?: (config: CliConfig) => Promise<RunningStack>;
+  maintain?: (
+    config: CliConfig,
+    options: StartupMaintenanceOptions,
+  ) => Promise<StartupMaintenanceResult>;
   start?: (plan: SupervisorPlan, config: CliConfig) => Promise<number>;
 }
 
@@ -72,6 +77,13 @@ export async function runTui(config: CliConfig, options: RunTuiOptions = {}): Pr
   }
 
   ensureDirs(config);
+  const maintain = options.maintain ?? runStartupMaintenance;
+  try {
+    await maintain(config, {});
+  } catch (error) {
+    console.error(`super-rlm: startup maintenance failed: ${error instanceof Error ? error.message : String(error)}; continuing`);
+  }
+
   const originCwd = process.cwd();
   const plan = buildSupervisorPlan(config, {
     originCwd,

@@ -47,3 +47,20 @@ test("slash opens command mode; f filters Tasks", () => {
   assert.equal(mapKey("f", base), null);
   assert.equal(mapKey("f", { view: "detail", focus: "main", piRunning: false }), null);
 });
+
+test("Task Detail opens the session view, which locks Alt switching and owns Esc", () => {
+  const detail: KeyContext = { view: "detail", focus: "main", piRunning: false };
+  assert.deepEqual(mapKey("v", detail), { kind: "open-session" });
+  assert.equal(mapKey("v", { view: "tasks", focus: "main", piRunning: false }), null);
+
+  const session: KeyContext = { view: "session", focus: "main", piRunning: false };
+  assert.deepEqual(mapKey("\x1b", session), { kind: "view", view: "detail" });
+  assert.deepEqual(mapKey("j", session), { kind: "scroll", delta: 1 });
+  assert.deepEqual(mapKey("k", session), { kind: "scroll", delta: -1 });
+  assert.deepEqual(mapKey("\x1b[B", session), { kind: "scroll", delta: 1 });
+  assert.deepEqual(mapKey("r", session), { kind: "refresh" });
+  assert.equal(mapKey("\x1b2", session), null);
+  assert.equal(mapKey("\x1b3", session), null);
+  assert.equal(mapKey("/", session), null);
+  assert.deepEqual(mapKey("\x03", session), { kind: "exit" });
+});

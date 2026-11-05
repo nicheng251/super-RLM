@@ -9,6 +9,7 @@ from super_rlm_worker.api import create_app
 from super_rlm_worker.config import WorkerConfig
 from super_rlm_worker.executor import (
     AtCapacity,
+    ExecutionNotFound,
     InvalidExecution,
     InvalidReportToken,
     WorkerShuttingDown,
@@ -20,6 +21,8 @@ class StubManager:
         self.running = 0
         self.max_concurrency = 2
         self.full = False
+        self.session_view_value = None
+        self.session_view_missing = False
 
     async def start(self, request):
         if self.full:
@@ -33,6 +36,11 @@ class StubManager:
         if token != "good-token":
             raise InvalidReportToken("bad token")
         return ReportAck(accepted=True)
+
+    def session_view(self, ticket_id):
+        if self.session_view_missing:
+            raise ExecutionNotFound(ticket_id)
+        return self.session_view_value
 
 
 def config(tmp_path):
@@ -132,3 +140,90 @@ def test_report_requires_token(tmp_path):
     )
     assert good.status_code == 200
     assert good.json()["accepted"] is True
+
+
+def _session_view(**overrides):
+    values = {
+        "ticket_id": "tkt_1",
+        "session_ref": "C:/sessions/sess-1.jsonl",
+        "session_dir": "C:/sessions",
+        "session_id": "sess-1",
+        "session_file": "C:/sessions/sess-1.jsonl",
+        "daemon_socket": "C:/home/prime/daemon/worker.sock",
+        "status": "running",
+        "running": True,
+        "worker_pid": 4321,
+        "exists": True,
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
+
+
+def test_ticket_session_returns_view(tmp_path):
+    manager = StubManager()
+    manager.session_view_value = _session_view()
+    client = TestClient(create_app(manager, config(tmp_path)))
+    response = client.get(
+        "/v1/tickets/tkt_1/session",
+        headers={"authorization": "Bearer test-worker-token"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "ticket_id": "tkt_1",
+        "session_ref": "C:/sessions/sess-1.jsonl",
+        "session_dir": "C:/sessions",
+        "session_id": "sess-1",
+        "session_file": "C:/sessions/sess-1.jsonl",
+        "daemon_socket": "C:/home/prime/daemon/worker.sock",
+        "status": "running",
+        "running": True,
+        "worker_pid": 4321,
+        "exists": True,
+    }
+
+
+def test_ticket_session_without_session_ref(tmp_path):
+    manager = StubManager()
+    manager.session_view_value = _session_view(
+        session_ref=None,
+        session_id=None,
+        session_file=None,
+        status="unknown",
+        running=False,
+        exists=False,
+    )
+    client = TestClient(create_app(manager, config(tmp_path)))
+    response = client.get(
+        "/v1/tickets/tkt_1/session",
+        headers={"authorization": "Bearer test-worker-token"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session_ref"] is None
+    assert body["session_id"] is None
+    assert body["session_file"] is None
+    assert body["exists"] is False
+
+
+def test_ticket_session_unknown_ticket_is_404(tmp_path):
+    manager = StubManager()
+    manager.session_view_missing = True
+    client = TestClient(create_app(manager, config(tmp_path)))
+    response = client.get(
+        "/v1/tickets/tkt_missing/session",
+        headers={"authorization": "Bearer test-worker-token"},
+    )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "execution_not_found"
+
+
+def test_ticket_session_requires_worker_token(tmp_path):
+    manager = StubManager()
+    manager.session_view_value = _session_view()
+    client = TestClient(create_app(manager, config(tmp_path)))
+    assert client.get("/v1/tickets/tkt_1/session").status_code == 401
+    bad = client.get(
+        "/v1/tickets/tkt_1/session",
+        headers={"authorization": "Bearer wrong-token"},
+    )
+    assert bad.status_code == 403

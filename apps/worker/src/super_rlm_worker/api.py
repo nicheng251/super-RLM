@@ -26,10 +26,37 @@ class CancelRequest(BaseModel):
     reason: str | None = None
 
 
+class TicketSessionResponse(BaseModel):
+    ticket_id: str
+    session_ref: str | None
+    session_dir: str
+    session_id: str | None
+    session_file: str | None
+    daemon_socket: str
+    status: str
+    running: bool
+    worker_pid: int
+    exists: bool
+
+
 def _bearer(request: Request) -> str | None:
     header = request.headers.get("authorization", "")
     prefix = "Bearer "
     return header[len(prefix):] if header.startswith(prefix) else None
+
+
+def _require_worker_token(request: Request, config: WorkerConfig) -> None:
+    token = _bearer(request)
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "invalid_worker_token", "message": "missing token"},
+        )
+    if not config.worker_token or not secrets.compare_digest(token, config.worker_token):
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "invalid_worker_token", "message": "invalid token"},
+        )
 
 
 def create_app(
@@ -79,19 +106,15 @@ def create_app(
             content=ExecutionResponse(execution_id=state.execution_id).model_dump(mode="json"),
         )
 
+    @app.get("/v1/tickets/{ticket_id}/session")
+    async def ticket_session(ticket_id: str, request: Request):
+        _require_worker_token(request, config)
+        view = manager.session_view(ticket_id)
+        return TicketSessionResponse.model_validate(view, from_attributes=True)
+
     @app.post("/v1/shutdown")
     async def shutdown(request: Request):
-        token = _bearer(request)
-        if not token:
-            raise HTTPException(
-                status_code=401,
-                detail={"code": "invalid_worker_token", "message": "missing token"},
-            )
-        if not config.worker_token or not secrets.compare_digest(token, config.worker_token):
-            raise HTTPException(
-                status_code=403,
-                detail={"code": "invalid_worker_token", "message": "invalid token"},
-            )
+        _require_worker_token(request, config)
         callback = getattr(app.state, "request_shutdown", None)
         if callback is None:
             raise HTTPException(

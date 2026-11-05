@@ -143,7 +143,7 @@ export class Footer implements Component {
   invalidate(): void {}
 }
 
-export type ChatKind = "user" | "assistant" | "tool" | "system" | "error";
+export type ChatKind = "user" | "assistant" | "thinking" | "tool" | "system" | "error";
 
 export interface ChatLine {
   kind: ChatKind;
@@ -165,11 +165,13 @@ export class ChatPane implements Component {
         ? cyan("you  ")
         : line.kind === "assistant"
           ? green("pi   ")
-          : line.kind === "tool"
-            ? dim("tool ")
-            : line.kind === "error"
-              ? red("err  ")
-              : gray("     ");
+          : line.kind === "thinking"
+            ? gray("thk  ")
+            : line.kind === "tool"
+              ? dim("tool ")
+              : line.kind === "error"
+                ? red("err  ")
+                : gray("     ");
       const body = wrapTextWithAnsi(line.text || " ", Math.max(8, safe - 5));
       for (let index = 0; index < body.length; index += 1) {
         out.push(truncateToWidth(`${index === 0 ? prefix : "     "}${body[index]}`, safe));

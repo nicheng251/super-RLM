@@ -12,6 +12,7 @@ export type Action =
   | { kind: "resume" }
   | { kind: "retry" }
   | { kind: "cancel" }
+  | { kind: "open-session" }
   | { kind: "refresh" }
   | { kind: "cycle-filter" }
   | { kind: "abort" }
@@ -50,6 +51,15 @@ function altDigitView(data: string): ViewName | null {
 /** Maps one raw terminal chunk to an app action. Unmapped input reaches the focused component. */
 export function mapKey(data: string, context: KeyContext): Action | null {
   if (matchesKey(data, Key.ctrl("c"))) return { kind: "exit" };
+  if (context.view === "session") {
+    // The nested session view owns Esc and scrolling; Alt+1..4 stay disabled
+    // so the only way back is the documented Esc -> Task Detail chain.
+    if (matchesKey(data, Key.escape)) return { kind: "view", view: "detail" };
+    if (matchesKey(data, "j") || matchesKey(data, Key.down)) return { kind: "scroll", delta: 1 };
+    if (matchesKey(data, "k") || matchesKey(data, Key.up)) return { kind: "scroll", delta: -1 };
+    if (matchesKey(data, "r")) return { kind: "refresh" };
+    return null;
+  }
   const view = altDigitView(data);
   if (view) return { kind: "view", view };
 
@@ -73,6 +83,7 @@ export function mapKey(data: string, context: KeyContext): Action | null {
   if (matchesKey(data, Key.enter) && context.view === "tasks") return { kind: "activate" };
   if (context.view === "detail") {
     if (matchesKey(data, Key.escape)) return { kind: "view", view: "tasks" };
+    if (matchesKey(data, "v")) return { kind: "open-session" };
     if (matchesKey(data, "a")) return { kind: "answer" };
     if (matchesKey(data, "s")) return { kind: "resume" };
     if (matchesKey(data, "t")) return { kind: "retry" };

@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import {
   CombinedAutocompleteProvider,
   Editor,
@@ -14,10 +16,11 @@ import { RpcClient, type JsonAgentSessionEvent } from "@earendil-works/pi-coding
 import { buildRouterArgs, lookupModelInfo, routerEnv, type CliConfig } from "../../cli/src/config.ts";
 import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model.ts";
 import type { ProfileSummary, TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
-import { TuiApi } from "./api.ts";
+import { TicketSessionHttpError, TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
 import { COMMAND_HELP, COMMANDS, THINKING_LEVELS, parseSlashCommand, type ThinkingLevel } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
+import { parseSessionJsonl } from "./session-format.ts";
 import {
   addEvent,
   clamp,
@@ -49,7 +52,8 @@ import { bold, cyan, dim, gray, green, red, yellow } from "./ui/theme.ts";
 const FOOTER_HELP: Record<ViewName, string> = {
   chat: "Enter send/steer \u00b7 / commands \u00b7 Alt+1..4 views \u00b7 ^C exit",
   tasks: "j/k select \u00b7 Enter detail \u00b7 f filter \u00b7 r refresh \u00b7 Alt+1 chat",
-  detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 r refresh \u00b7 Esc back \u00b7 Alt+2 tasks",
+  detail: "j/k ticket \u00b7 v session \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 r refresh \u00b7 Esc back \u00b7 Alt+2 tasks",
+  session: "j/k scroll \u00b7 r refresh \u00b7 Esc back \u00b7 Alt+1..4 disabled",
   workers: "j/k scroll \u00b7 r refresh \u00b7 Alt+1 chat",
   events: "j/k scroll \u00b7 r refresh \u00b7 Alt+1 chat",
 };
@@ -71,6 +75,7 @@ export class TuiApp {
   private readonly api: TuiApi;
   private readonly tasksModel: TasksPageModel;
   private detailModel: TaskDetailPageModel | null = null;
+  private sessionTicketId: string | null = null;
   private readonly editor: Editor;
   private readonly sidebar: SidebarPane;
   private readonly statusBar: StatusBar;
@@ -78,6 +83,7 @@ export class TuiApp {
   private readonly chatPane = new ChatPane();
   private readonly tasksPane = new LinesPane();
   private readonly detailPane = new LinesPane();
+  private readonly sessionPane = new ChatPane();
   private readonly workersPane = new LinesPane();
   private readonly eventsPane = new LinesPane();
 
@@ -119,6 +125,7 @@ export class TuiApp {
       baseUrl: config.orchestratorUrl,
       token: config.routerToken,
       workerPort: config.workerPort,
+      workerToken: config.workerToken,
     });
     this.tasksModel = new TasksPageModel(this.api.client);
     this.sidebar = new SidebarPane(
@@ -232,6 +239,9 @@ export class TuiApp {
         if (ticket) await this.ticketAction(ticket.ticket_id, "cancel");
         return;
       }
+      case "open-session":
+        this.openSession();
+        return;
       case "refresh":
         await this.refreshCurrent();
         return;
@@ -427,6 +437,10 @@ export class TuiApp {
   }
 
   private openView(view: ViewName): void {
+    if (view === "session") {
+      this.openSession();
+      return;
+    }
     setView(this.state, view);
     this.sidebar.syncToCurrent();
     this.rebuildLayout();
@@ -486,9 +500,11 @@ export class TuiApp {
       { component: this.statusBar, basis: "auto", shrink: 0, minSize: 1, maxSize: 1 },
       { component: body, basis: 0, grow: 1, minSize: 3 },
     ];
-    if (chat) {
+    if (chat || this.state.view === "session") {
       // Help line above the input so the editor spans the full bottom row.
-      root.push({ component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: 1 });
+      // The session view keeps the input visible but unfocused, like the
+      // model page does while a nested component owns the keyboard.
+      root.push({ component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: chat ? 1 : 2 });
       root.push({ component: this.editor, basis: "auto", shrink: 0, minSize: 1 });
     } else {
       root.push({ component: this.footer, basis: "auto", shrink: 0, minSize: 1, maxSize: 2 });
@@ -504,6 +520,15 @@ export class TuiApp {
   }
 
   private buildMainScroll(): ScrollView {
+    if (this.state.view === "session") {
+      const scroll = new ScrollView(this.sessionPane, {
+        primary: true,
+        follow: "none",
+        scrollbar: "auto",
+      });
+      this.mainScroll = scroll;
+      return scroll;
+    }
     const pane = this.paneFor(this.state.view);
     const scroll = new ScrollView(pane, {
       primary: true,
@@ -523,7 +548,7 @@ export class TuiApp {
 
   private sidebarModel(): SidebarModel {
     return {
-      current: this.state.view === "detail" ? "tasks" : this.state.view,
+      current: this.state.view === "detail" || this.state.view === "session" ? "tasks" : this.state.view,
       focused: false,
       tasksWaiting: waitingTaskCount(this.tasksModel.state.tasks),
       detailWaiting: this.detailModel?.state.task?.tickets.some((ticket) => ticket.status === "waiting") ?? false,
@@ -660,6 +685,87 @@ export class TuiApp {
     this.openView("detail");
   }
 
+  private openSession(): void {
+    const ticket = this.currentTicket();
+    this.sessionTicketId = ticket?.ticket_id ?? null;
+    setView(this.state, "session");
+    this.sidebar.syncToCurrent();
+    this.rebuildLayout();
+    this.setFocus("main");
+    if (!ticket) {
+      this.setSessionLines([
+        { kind: "system", text: "No ticket selected." },
+        { kind: "system", text: "Open Task Detail and select a ticket before viewing its session." },
+      ]);
+      return;
+    }
+    this.setSessionLines([{ kind: "system", text: `Loading session for ${ticket.ticket_id}...` }]);
+    void this.loadSession();
+  }
+
+  private setSessionLines(lines: ChatLine[]): void {
+    this.sessionPane.setLines(lines);
+    this.tui.requestRender();
+  }
+
+  /** Loads the Worker session record and renders the recent Prime JSONL entries. */
+  private async loadSession(): Promise<void> {
+    const ticketId = this.sessionTicketId ?? this.currentTicket()?.ticket_id ?? null;
+    if (!ticketId) {
+      this.setSessionLines([{ kind: "system", text: "No ticket selected." }]);
+      return;
+    }
+    this.sessionTicketId = ticketId;
+    const lines: ChatLine[] = [];
+    try {
+      const info = await this.api.ticketSession(ticketId);
+      lines.push({
+        kind: "system",
+        text: `Ticket ${info.ticket_id} \u00b7 ${info.status}${info.running ? " \u00b7 running" : ""}`,
+      });
+      lines.push({
+        kind: "system",
+        text: `session ${info.session_id ?? "-"} \u00b7 worker pid ${info.worker_pid ?? "-"}`,
+      });
+      const sessionFile = info.session_file;
+      if (!sessionFile || !info.exists) {
+        lines.push({ kind: "system", text: "No session file yet. The ticket may still be queued or preparing." });
+        if (sessionFile) lines.push({ kind: "system", text: `file ${sessionFile}` });
+        this.setSessionLines(lines);
+        return;
+      }
+      lines.push({ kind: "system", text: `file ${sessionFile}` });
+      lines.push({ kind: "system", text: "" });
+      let raw: string;
+      try {
+        raw = await readFile(sessionFile, "utf8");
+      } catch (error) {
+        lines.push({ kind: "error", text: `Cannot read session file: ${messageOf(error)}` });
+        this.setSessionLines(lines);
+        return;
+      }
+      const entries = parseSessionJsonl(raw, { limit: 100 });
+      if (entries.length === 0) {
+        lines.push({ kind: "system", text: "Session file has no messages yet." });
+      } else {
+        lines.push(...entries.map((entry) => ({ kind: entry.kind, text: entry.text })));
+      }
+      this.setSessionLines(lines);
+    } catch (error) {
+      if (error instanceof TicketSessionHttpError && error.status === 404) {
+        this.setSessionLines([
+          { kind: "system", text: `No session for ${ticketId} yet.` },
+          { kind: "system", text: "The Worker has no execution state for this ticket (404)." },
+        ]);
+      } else {
+        this.setSessionLines([
+          { kind: "system", text: `Ticket ${ticketId} \u00b7 session unavailable` },
+          { kind: "error", text: messageOf(error) },
+        ]);
+      }
+    }
+  }
+
   private currentTicket(): TicketSummary | null {
     return this.detailModel?.selectedTicket() ?? null;
   }
@@ -680,6 +786,11 @@ export class TuiApp {
   }
 
   private async refreshCurrent(): Promise<void> {
+    if (this.state.view === "session") {
+      await this.loadSession();
+      this.flash("session refreshed");
+      return;
+    }
     await this.loadTasks();
     if (this.state.view === "detail" && this.detailModel) await this.loadDetail();
     if (this.state.view === "workers") await this.loadWorkers();

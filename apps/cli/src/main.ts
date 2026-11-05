@@ -13,6 +13,7 @@ import { syncModels } from "./commands/models.ts";
 import { runProfiles } from "./commands/profiles.ts";
 import { runTasks } from "./commands/tasks.ts";
 import { runTui } from "./commands/tui.ts";
+import { describeLogRotation, rotateServiceLogs } from "./maintenance.ts";
 import { isProcessAlive, serviceState, serviceUrl, stopAllServices } from "./services.ts";
 import { readSupervisorPid, stopSupervisor } from "./supervisor/pid.ts";
 
@@ -77,6 +78,11 @@ in the Orchestrator database. The default scope is --tmp --sessions
 --workspaces (older than 7 days); --worktrees is opt-in and skips dirty
 worktrees. --all selects every scope.
 
+Starting the TUI rotates the closed Orchestrator/Worker logs above
+SUPER_RLM_LOG_MAX_BYTES (default 10 MiB, keeping SUPER_RLM_LOG_KEEP=3) and runs
+an applied GC for resources older than SUPER_RLM_GC_OLDER_THAN_DAYS=7. Set
+SUPER_RLM_AUTO_MAINTENANCE=0 to skip that startup GC.
+
 Node is a host prerequisite (>= 22.19). The project owns Pi and Prime Agent.`);
 }
 
@@ -113,6 +119,13 @@ async function down(): Promise<number> {
   const supervisor = await stopSupervisor(config);
   console.log(`supervisor:   ${supervisor.stopped ? `stopped (${supervisor.pid})` : "not running"}`);
   await stopAllServices(config);
+  for (const rotated of rotateServiceLogs(config)) {
+    if (rotated.rotated) {
+      console.log(`logs:         rotated ${describeLogRotation(rotated)}`);
+    } else if (rotated.error) {
+      console.error(`logs:         could not rotate ${rotated.name ?? rotated.path}: ${rotated.error}`);
+    }
+  }
   const daemon = await shutdownProjectDaemon(config);
   if (daemon.ran) {
     console.log("daemon:       stopped");

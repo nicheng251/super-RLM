@@ -32,13 +32,17 @@ right, and the Chat editor spanning the full terminal width at the bottom.
   filter and search.
 - **Task Detail** - opened from Tasks with Enter; tickets with profile, summary,
   question, error, workspace, branch, commit, and delivery fields. `a` answers a
-  waiting ticket, `s` resumes, `t` retries, `c` cancels.
+  waiting ticket, `s` resumes, `t` retries, `c` cancels, `v` opens a read-only
+  session viewer.
 - **Workers** - `GET /v1/workers` (defensive; shows an error if the route is
   absent).
 - **Events** - SSE `GET /v1/events?after=<cursor>` with reconnect and backoff.
 
 Alt+1..4 is the only view-switching shortcut (Chat, Tasks, Workers, Events).
 Task Detail is a subpage opened with Enter from Tasks, not a sidebar item.
+`v` opens the selected Ticket's Prime session read-only. Session view keeps the
+sidebar and input hint visible, uses `j/k` to scroll, `r` to refresh, and `Esc`
+to return to Task Detail. Alt+1..4 are disabled while it is open.
 Ctrl+digit, F-keys, Tab, and sidebar navigation are not used for view switching.
 Ctrl+C exits. The Chat editor autocompletes non-view slash commands.
 

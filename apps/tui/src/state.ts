@@ -2,13 +2,14 @@ import { isTerminalTaskStatus, type Event, type TaskListItem, type WorkerView } 
 
 export type { WorkerView };
 
-export type ViewName = "chat" | "tasks" | "detail" | "workers" | "events";
+export type ViewName = "chat" | "tasks" | "detail" | "session" | "workers" | "events";
 
 export const VIEW_ORDER: readonly ViewName[] = ["chat", "tasks", "workers", "events"];
 export const VIEW_LABELS: Record<ViewName, string> = {
   chat: "Chat",
   tasks: "Tasks",
   detail: "Task Detail",
+  session: "Ticket Session",
   workers: "Workers",
   events: "Events",
 };

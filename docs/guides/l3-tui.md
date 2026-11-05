@@ -75,7 +75,8 @@ Alt+2         Tasks
 Alt+3         Workers
 Alt+4         Events
 Enter         open the selected Task's Detail subpage
-Esc           in Task Detail, return to Tasks
+v             in Task Detail, open the selected Ticket's session read-only
+Esc           in Task Detail, return to Tasks; in session view, return to Task Detail
 /             command mode (type /command in Chat)
 Ctrl+C        exit
 Esc           back / abort Chat turn
@@ -155,6 +156,10 @@ Orchestrator with an explicit error instead of being ignored. Use
 saved overrides and return to the `config/profiles.yaml` values.
 
 View switching is `Alt+1..4` only. Task Detail is a child page of Tasks.
+
+Session view shows recent Prime JSONL messages, thinking, tool calls, and
+truncated tool results. It uses `j/k` to scroll, `r` to refresh, and `Esc` to
+return to Task Detail. Alt+1..4 are disabled while it is open.
 
 `f` cycles the Tasks filter. `waiting` includes tasks with waiting/blocked
 counts; `running` includes tasks with running tickets; `terminal` includes

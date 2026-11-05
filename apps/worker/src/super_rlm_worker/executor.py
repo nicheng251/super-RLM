@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import secrets
 import uuid
 from dataclasses import dataclass, field
@@ -104,6 +105,22 @@ class ExecutionState:
         return self.terminal_report is not None
 
 
+@dataclass(frozen=True)
+class TicketSessionView:
+    """Read-only view of the Prime Agent session for one Ticket."""
+
+    ticket_id: str
+    session_ref: str | None
+    session_dir: str
+    session_id: str | None
+    session_file: str | None
+    daemon_socket: str
+    status: str
+    running: bool
+    worker_pid: int
+    exists: bool
+
+
 class ExecutionManager:
     def __init__(
         self,
@@ -141,6 +158,41 @@ class ExecutionManager:
 
     def active_executions(self) -> list[ExecutionState]:
         return [state for state in self._by_execution.values() if not state.done.is_set()]
+
+    def session_view(self, ticket_id: str) -> TicketSessionView:
+        """Return the newest execution state recorded for a Ticket.
+
+        Raises ExecutionNotFound when the Worker has never seen the Ticket.
+        The view is intentionally read-only and never exposes report tokens.
+        """
+        state = next(
+            (item for item in reversed(self._by_execution.values()) if item.ticket_id == ticket_id),
+            None,
+        )
+        if state is None:
+            raise ExecutionNotFound(ticket_id)
+
+        running = not state.done.is_set()
+        if running:
+            status = self.phase(state)
+        elif state.terminal_report is not None:
+            status = state.terminal_report.state.value
+        else:
+            status = "unknown"
+
+        session_file = Path(state.session_ref) if state.session_ref else None
+        return TicketSessionView(
+            ticket_id=state.ticket_id,
+            session_ref=state.session_ref,
+            session_dir=str(state.session_dir),
+            session_id=session_file.stem if session_file is not None else None,
+            session_file=state.session_ref,
+            daemon_socket=self.config.daemon_socket,
+            status=status,
+            running=running,
+            worker_pid=os.getpid(),
+            exists=session_file is not None and session_file.exists(),
+        )
 
     def phase(self, state: ExecutionState) -> str:
         if state.terminal_report is not None:
