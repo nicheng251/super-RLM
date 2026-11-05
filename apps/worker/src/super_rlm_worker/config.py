@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-def _bool_env(name: str, default: bool = False) -> bool:
-    value = os.environ.get(name)
+def _bool_env(source: dict[str, str], name: str, default: bool = False) -> bool:
+    value = source.get(name)
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -62,7 +62,12 @@ class WorkerConfig:
     worker_prompt: Path
     workspace_root: Path
     session_root: Path
-    daemon_socket: Path
+    daemon_socket: str
+    daemon_autostart: bool
+    daemon_start_timeout_s: float
+    daemon_command_timeout_s: float
+    daemon_shutdown_timeout_s: float
+    cancel_wait_s: float
     heartbeat_interval_s: float
     start_timeout_s: float
     turn_timeout_s: float
@@ -84,6 +89,13 @@ class WorkerConfig:
             _repo_root() / "runtime" / "prime-agent" / ("prime-agent.exe" if os.name == "nt" else "prime-agent"),
         ))
         worker_id = source.get("SUPER_RLM_WORKER_ID", f"wrk_{socket.gethostname().lower()}_{os.getpid()}")
+        # Imported here so config stays importable without loading daemon.py at
+        # module import time (daemon.py imports this module).
+        from .daemon import canonical_socket
+
+        daemon_socket = canonical_socket(
+            source.get("SUPER_RLM_PRIME_DAEMON", home / "prime" / "daemon" / "worker.sock")
+        )
         return cls(
             orchestrator_url=source.get("SUPER_RLM_ORCHESTRATOR_URL", "http://127.0.0.1:8787").rstrip("/"),
             worker_id=worker_id,
@@ -109,7 +121,12 @@ class WorkerConfig:
             worker_prompt=Path(source.get("SUPER_RLM_WORKER_PROMPT", _repo_root() / "apps" / "worker" / "prompts" / "worker.md")),
             workspace_root=Path(source.get("SUPER_RLM_WORKSPACES", home / "workspaces")),
             session_root=Path(source.get("SUPER_RLM_PRIME_SESSIONS", home / "prime" / "sessions")),
-            daemon_socket=Path(source.get("SUPER_RLM_PRIME_DAEMON", home / "prime" / "daemon" / "worker.sock")),
+            daemon_socket=daemon_socket,
+            daemon_autostart=_bool_env(source, "SUPER_RLM_DAEMON_AUTOSTART", True),
+            daemon_start_timeout_s=float(source.get("SUPER_RLM_DAEMON_START_TIMEOUT_S", "30")),
+            daemon_command_timeout_s=float(source.get("SUPER_RLM_DAEMON_COMMAND_TIMEOUT_S", "30")),
+            daemon_shutdown_timeout_s=float(source.get("SUPER_RLM_DAEMON_SHUTDOWN_TIMEOUT_S", "60")),
+            cancel_wait_s=float(source.get("SUPER_RLM_CANCEL_WAIT_S", "10")),
             heartbeat_interval_s=float(source.get("SUPER_RLM_HEARTBEAT_INTERVAL_S", "10")),
             start_timeout_s=float(source.get("SUPER_RLM_START_TIMEOUT_S", "30")),
             turn_timeout_s=float(source.get("SUPER_RLM_TURN_TIMEOUT_S", "3600")),
@@ -119,11 +136,15 @@ class WorkerConfig:
             assignment_heartbeat_interval_s=float(source.get("SUPER_RLM_ASSIGNMENT_HEARTBEAT_INTERVAL_S", "10")),
         )
 
+    @property
+    def daemon_socket_path(self) -> Path:
+        return Path(self.daemon_socket)
+
     def ensure_dirs(self) -> None:
         for path in (
             self.home,
             self.workspace_root,
             self.session_root,
-            self.daemon_socket.parent,
+            self.daemon_socket_path.parent,
         ):
             path.mkdir(parents=True, exist_ok=True)

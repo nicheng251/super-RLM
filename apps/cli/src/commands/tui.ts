@@ -1,9 +1,16 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { routerEnv, type CliConfig } from "../config.ts";
-import { ensureAllServices } from "../services.ts";
+import { ensureDirs, routerEnv, type CliConfig } from "../config.ts";
+import { detectRunningStack, describeRunningStack, hasRunningStack, type RunningStack } from "../supervisor/detect.ts";
+import { buildSupervisorPlan, type SupervisorPlan } from "../supervisor/plan.ts";
+import { runSupervisor } from "../supervisor/run.ts";
+
+export interface RunTuiOptions {
+  platform?: NodeJS.Platform;
+  detect?: (config: CliConfig) => Promise<RunningStack>;
+  start?: (plan: SupervisorPlan, config: CliConfig) => Promise<number>;
+}
 
 export function tuiEntry(config: CliConfig): string {
   return join(config.repoRoot, "apps", "tui", "src", "main.ts");
@@ -28,23 +35,53 @@ export function tuiEnv(
   return env;
 }
 
-export async function runTui(config: CliConfig): Promise<number> {
+function fail(message: string): number {
+  console.error(`super-rlm: ${message}`);
+  return 1;
+}
+
+export async function runTui(config: CliConfig, options: RunTuiOptions = {}): Promise<number> {
   const entry = tuiEntry(config);
   if (!existsSync(entry)) {
-    console.error(`TUI entry not found: ${entry}\nThe L3 terminal UI is not installed in this build.`);
-    return 1;
+    return fail(`TUI entry not found: ${entry}\nThe L3 terminal UI is not installed in this build.`);
   }
-  await ensureAllServices(config);
-  return await new Promise<number>((resolve) => {
-    const child = spawn(process.execPath, [entry], {
-      cwd: process.cwd(),
-      env: tuiEnv(config, process.cwd()),
-      stdio: "inherit",
-    });
-    child.on("error", (error) => {
-      console.error(`failed to launch TUI: ${error.message}`);
-      resolve(1);
-    });
-    child.on("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
+  const platform = options.platform ?? process.platform;
+  if (platform !== "win32") {
+    return fail("the TUI stack must run inside a Windows Job Object; Job APIs are unavailable on this platform.");
+  }
+  const detect = options.detect ?? detectRunningStack;
+  let stack: RunningStack;
+  try {
+    stack = await detect(config);
+  } catch (error) {
+    return fail(`could not determine whether services are running: ${error instanceof Error ? error.message : String(error)}\nRun \`super-rlm down\` before starting.`);
+  }
+  if (hasRunningStack(stack)) {
+    const detail = describeRunningStack(stack).map((line) => `  - ${line}`).join("\n");
+    return fail(`refusing to start because super-RLM is already running:\n${detail}\nRun \`super-rlm down\`, then start again.`);
+  }
+
+  if (!existsSync(config.orchestratorMain)) {
+    return fail(`Orchestrator entry not found: ${config.orchestratorMain}`);
+  }
+  if (!existsSync(config.workerPython)) {
+    return fail(`Worker venv not found: ${config.workerPython}\nRun: cd apps/worker && uv venv --python 3.11 .venv && uv pip install --python .venv/Scripts/python.exe -e ".[dev]"`);
+  }
+  if (!existsSync(config.primeAgent)) {
+    return fail(`Prime Agent not found: ${config.primeAgent}`);
+  }
+
+  ensureDirs(config);
+  const originCwd = process.cwd();
+  const plan = buildSupervisorPlan(config, {
+    originCwd,
+    tuiEntry: entry,
+    tuiEnv: tuiEnv(config, originCwd),
   });
+  const start = options.start ?? runSupervisor;
+  try {
+    return await start(plan, config);
+  } catch (error) {
+    return fail(`could not start the TUI supervisor: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }

@@ -1,28 +1,50 @@
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { loadConfig, type RouterOptions } from "./config.ts";
+import { loadConfig } from "./config.ts";
+import { daemonState, runningDaemons, shutdownProjectDaemon } from "./daemon.ts";
 import { runArtifacts } from "./commands/artifacts.ts";
 import { runBackup, runRestore } from "./commands/backup.ts";
 import { runBootstrap } from "./commands/bootstrap.ts";
-import { runDev } from "./commands/dev.ts";
 import { runDoctor } from "./commands/doctor.ts";
 import { runInit } from "./commands/init.ts";
 import { syncModels } from "./commands/models.ts";
 import { runProfiles } from "./commands/profiles.ts";
-import { runRouter } from "./commands/router.ts";
 import { runTasks } from "./commands/tasks.ts";
 import { runTui } from "./commands/tui.ts";
-import { ensureAllServices, serviceState, stopAllServices } from "./services.ts";
+import { isProcessAlive, serviceState, serviceUrl, stopAllServices } from "./services.ts";
+import { readSupervisorPid, stopSupervisor } from "./supervisor/pid.ts";
+
+const RETIRED_COMMANDS = new Set(["up", "router", "dev"]);
+
+export interface ParsedCommand {
+  command: string;
+  rest: string[];
+  retired?: string;
+  name?: string;
+}
+
+/** Parse the top-level command. No arguments start the TUI stack. */
+export function parseCommand(argv: string[]): ParsedCommand {
+  if (argv.length === 0) return { command: "tui", rest: [] };
+  const [first, ...rest] = argv;
+  if (first === "help" || first === "--help" || first === "-h") return { command: "help", rest };
+  if (first === "version" || first === "--version" || first === "-v") return { command: "version", rest };
+  if (RETIRED_COMMANDS.has(first) || first === "--no-services") {
+    return { command: "retired", rest, retired: first };
+  }
+  if (first.startsWith("-")) return { command: "unknown", rest, name: first };
+  return { command: first, rest };
+}
 
 function help(): void {
   console.log(`super-rlm 0.1.0
 
 Usage:
-  super-rlm [router] [--new] [--session <id>] [--no-services] [pi args...]
-                                 Ensure Orchestrator/Worker, then launch Router
-  super-rlm up                   Start Orchestrator and Worker in the background
-  super-rlm down                 Stop background Orchestrator and Worker
-  super-rlm status               Show background service health and PIDs
-  super-rlm dev                  Start Orchestrator and Worker in the foreground
+  super-rlm                     Start the L3 terminal UI and its whole local stack
+  super-rlm tui                 Alias for super-rlm
+  super-rlm down                Stop the stack and the project Prime Agent daemon
+  super-rlm status              Show Orchestrator, Worker, and daemon status
   super-rlm artifacts <ticket_id> [--to <destination-dir>] [--all]
                                  Copy Ticket artifacts (or the whole workspace)
   super-rlm backup <destination-dir> [--include-secrets]
@@ -30,7 +52,6 @@ Usage:
   super-rlm restore <backup-dir>
                                  Restore an offline backup
   super-rlm tasks [--json] [--limit <n>]
-  super-rlm tui                  Launch the L3 terminal UI
   super-rlm doctor [--json]
   super-rlm init                 Create .super-rlm-project.json
   super-rlm bootstrap [--dry-run]  Prepare the project kernel venv and report skill
@@ -40,95 +61,96 @@ Usage:
   super-rlm profiles validate    Validate config/profiles.yaml
   super-rlm config               Print resolved configuration
 
+The TUI owns the Orchestrator, Worker, and Prime Agent daemon for its lifetime.
+Background and standalone Router commands were removed. If a stack is already
+running, use \`super-rlm down\` before starting again.
+
 Node is a host prerequisite (>= 22.19). The project owns Pi and Prime Agent.`);
 }
 
-function parseRouterArgs(args: string[]): RouterOptions & { projectId?: string; home?: string; noServices?: boolean } {
-  const extraArgs: string[] = [];
-  let newSession = false;
-  let noServices = false;
-  let sessionId: string | undefined;
-  let projectId: string | undefined;
-  let home: string | undefined;
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--new") {
-      newSession = true;
-    } else if (arg === "--no-services") {
-      noServices = true;
-    } else if (arg === "--session" && args[index + 1]) {
-      sessionId = args[++index];
-    } else if (arg === "--project-id" && args[index + 1]) {
-      projectId = args[++index];
-    } else if (arg === "--home" && args[index + 1]) {
-      home = args[++index];
-    } else {
-      extraArgs.push(arg);
-    }
+function formatDaemonLine(
+  state: Awaited<ReturnType<typeof daemonState>>,
+): string {
+  if (!state.available) return "unavailable (prime-agent not found)";
+  if (state.error) return `unknown (${state.error})`;
+  const running = runningDaemons(state.entries);
+  if (running.length === 0) return "down pid=-";
+  return `running pid=${running.map((entry) => entry.pid).join(",")}`;
+}
+
+async function status(): Promise<number> {
+  const config = loadConfig();
+  const [orchestrator, worker, daemon] = await Promise.all([
+    serviceState(config, "orchestrator"),
+    serviceState(config, "worker"),
+    daemonState(config),
+  ]);
+  for (const state of [orchestrator, worker]) {
+    const health = state.healthy ? "healthy" : "down";
+    console.log(`${state.name.padEnd(13)} ${health.padEnd(7)} pid=${state.pid ?? "-"} ${serviceUrl(config, state.name)}`);
   }
-  return { newSession, sessionId, projectId, home, noServices, extraArgs };
+  const supervisorPid = readSupervisorPid(config);
+  const supervisor = supervisorPid !== null && isProcessAlive(supervisorPid) ? `running pid=${supervisorPid}` : "down pid=-";
+  console.log(`supervisor    ${supervisor}`);
+  console.log(`daemon        ${formatDaemonLine(daemon)}`);
+  return 0;
 }
 
-function serviceUrlForStatus(config: ReturnType<typeof loadConfig>, name: "orchestrator" | "worker"): string {
-  return name === "orchestrator"
-    ? `${config.orchestratorUrl}/health`
-    : `http://127.0.0.1:${config.workerPort}/v1/health`;
+async function down(): Promise<number> {
+  const config = loadConfig();
+  const supervisor = await stopSupervisor(config);
+  console.log(`supervisor:   ${supervisor.stopped ? `stopped (${supervisor.pid})` : "not running"}`);
+  await stopAllServices(config);
+  const daemon = await shutdownProjectDaemon(config);
+  if (daemon.ran) {
+    console.log("daemon:       stopped");
+    return 0;
+  }
+  if (daemon.error) {
+    console.error(`daemon:       not stopped (${daemon.error})`);
+    return 1;
+  }
+  console.log("daemon:       not running");
+  return 0;
 }
 
-async function main(): Promise<number> {
-  const argv = process.argv.slice(2);
-  const command = argv[0] && !argv[0].startsWith("-") ? argv[0] : "router";
-  const rest = command === "router" && argv[0] === command ? argv.slice(1) : argv;
+export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
+  const parsed = parseCommand(argv);
 
-  if (command === "help" || command === "--help" || command === "-h") {
+  if (parsed.command === "help") {
     help();
     return 0;
   }
-  if (command === "version" || command === "--version" || command === "-v") {
+  if (parsed.command === "version") {
     console.log("0.1.0");
     return 0;
   }
-  if (command === "init") return runInit();
-  if (command === "bootstrap") return runBootstrap(loadConfig(), { dryRun: rest.includes("--dry-run") });
-  if (command === "models" && rest[1] === "sync") {
+  if (parsed.command === "retired") {
+    console.error(`super-rlm: '${parsed.retired}' is no longer supported. Start the TUI with \`super-rlm\`; use \`super-rlm status\` or \`super-rlm down\` for diagnostics.`);
+    return 1;
+  }
+  if (parsed.command === "tui") {
+    return runTui(loadConfig());
+  }
+  if (parsed.command === "status") return status();
+  if (parsed.command === "down") return down();
+
+  const rest = parsed.rest;
+  if (parsed.command === "init") return runInit();
+  if (parsed.command === "bootstrap") {
+    return runBootstrap(loadConfig(), { dryRun: rest.includes("--dry-run") });
+  }
+  if (parsed.command === "models" && rest[0] === "sync") {
     return syncModels(loadConfig(), { dryRun: rest.includes("--dry-run") });
   }
-  if (command === "profiles") {
-    return runProfiles(loadConfig(), argv.slice(1));
+  if (parsed.command === "profiles") {
+    return runProfiles(loadConfig(), rest);
   }
-
-  if (command === "router") {
-    const parsed = parseRouterArgs(rest);
-    const config = loadConfig({ projectId: parsed.projectId, home: parsed.home });
-    if (!parsed.noServices) await ensureAllServices(config);
-    return runRouter(config, parsed);
-  }
-
-  if (command === "up") {
-    await ensureAllServices(loadConfig());
-    return 0;
-  }
-  if (command === "down") {
-    await stopAllServices(loadConfig());
-    return 0;
-  }
-  if (command === "status") {
-    const config = loadConfig();
-    const states = await Promise.all([
-      serviceState(config, "orchestrator"),
-      serviceState(config, "worker"),
-    ]);
-    for (const state of states) {
-      console.log(`${state.name.padEnd(13)} ${state.healthy ? "healthy" : "down"} pid=${state.pid ?? "-"} ${serviceUrlForStatus(config, state.name)}`);
-    }
-    return 0;
-  }
-
-  if (command === "artifacts") {
+  if (parsed.command === "artifacts") {
     let ticketId: string | undefined;
     let to: string | undefined;
     let all = false;
-    for (let index = 1; index < rest.length; index += 1) {
+    for (let index = 0; index < rest.length; index += 1) {
       const arg = rest[index];
       if (arg === "--all") {
         all = true;
@@ -142,48 +164,46 @@ async function main(): Promise<number> {
     }
     return runArtifacts(loadConfig(), ticketId, { to, all });
   }
-  if (command === "backup") {
-    const args = rest.slice(1);
-    const includeSecrets = args.includes("--include-secrets");
-    const destination = args.find((arg) => arg !== "--include-secrets" && !arg.startsWith("-"));
+  if (parsed.command === "backup") {
+    const includeSecrets = rest.includes("--include-secrets");
+    const destination = rest.find((arg) => arg !== "--include-secrets" && !arg.startsWith("-"));
     if (!destination) {
       console.error("Usage: super-rlm backup <destination-dir> [--include-secrets]");
       return 1;
     }
     return runBackup(loadConfig(), destination, { includeSecrets });
   }
-  if (command === "restore") {
-    const backupDir = rest.slice(1).find((arg) => !arg.startsWith("-"));
+  if (parsed.command === "restore") {
+    const backupDir = rest.find((arg) => !arg.startsWith("-"));
     if (!backupDir) {
       console.error("Usage: super-rlm restore <backup-dir>");
       return 1;
     }
     return runRestore(loadConfig(), backupDir);
   }
-  if (command === "dev") return runDev(loadConfig());
-  if (command === "config") {
+  if (parsed.command === "config") {
     console.log(JSON.stringify(loadConfig(), null, 2));
     return 0;
   }
-  if (command === "tasks") {
+  if (parsed.command === "tasks") {
     const json = rest.includes("--json");
     const limitIndex = rest.indexOf("--limit");
     const limit = limitIndex >= 0 && rest[limitIndex + 1] ? Number(rest[limitIndex + 1]) : undefined;
     return runTasks(loadConfig(), { json, limit });
   }
-  if (command === "tui") {
-    return runTui(loadConfig());
-  }
-  if (command === "doctor") {
+  if (parsed.command === "doctor") {
     return runDoctor(loadConfig(), { json: rest.includes("--json") });
   }
 
-  console.error(`Unknown command: ${command}`);
+  console.error(`Unknown command: ${parsed.name ?? parsed.command}`);
   help();
   return 1;
 }
 
-main().then((code) => process.exit(code)).catch((error) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
-  process.exit(1);
-});
+const invoked = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : "";
+if (import.meta.url === invoked) {
+  main().then((code) => process.exit(code)).catch((error) => {
+    console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+    process.exit(1);
+  });
+}

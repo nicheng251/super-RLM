@@ -20,6 +20,8 @@ export interface CliConfig {
   routerExtension: string;
   routerPrompt: string;
   primeAgent: string;
+  /** Project Prime Agent daemon socket, canonicalized the same way as the Worker. */
+  primeDaemonSocket: string;
   orchestratorMain: string;
   workerDir: string;
   workerPython: string;
@@ -39,6 +41,21 @@ export interface CliConfig {
 
 export function findRepoRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+}
+
+/**
+ * Return the one daemon socket string used by the Worker, status, and shutdown.
+ *
+ * Prime Agent keys daemon identity to the raw socket path string. The Worker
+ * canonicalizes with `os.path.abspath` + `os.path.normcase`; on Windows that is
+ * an absolute, lower-cased, backslash-separated path. Admin commands must use
+ * the same spelling or they target a different daemon.
+ */
+export function canonicalDaemonSocket(value: string): string {
+  const absolute = resolve(value);
+  return process.platform === "win32"
+    ? absolute.toLowerCase().replaceAll("/", "\\")
+    : absolute;
 }
 
 export interface ModelDefault {
@@ -187,6 +204,9 @@ export function loadConfig(options: {
     routerExtension: join(repoRoot, "apps", "router", "extensions", "super-rlm.ts"),
     routerPrompt: join(repoRoot, "apps", "router", "prompts", "router.md"),
     primeAgent: join(repoRoot, "runtime", "prime-agent", process.platform === "win32" ? "prime-agent.exe" : "prime-agent"),
+    primeDaemonSocket: canonicalDaemonSocket(
+      env.SUPER_RLM_PRIME_DAEMON ?? join(home, "prime", "daemon", "worker.sock"),
+    ),
     orchestratorMain: join(repoRoot, "apps", "orchestrator", "src", "main.ts"),
     workerDir: join(repoRoot, "apps", "worker"),
     workerPython: join(repoRoot, "apps", "worker", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python"),
@@ -286,6 +306,7 @@ export function workerEnv(config: CliConfig): NodeJS.ProcessEnv {
     SUPER_RLM_WORKER_PORT: String(config.workerPort),
     SUPER_RLM_WORKER_TOKEN: config.workerToken,
     SUPER_RLM_PRIME_AGENT: config.primeAgent,
+    SUPER_RLM_PRIME_DAEMON: config.primeDaemonSocket,
     SUPER_RLM_PRIME_PROVIDER: config.primeProvider,
     SUPER_RLM_PRIME_MODEL: config.primeModel,
     SUPER_RLM_KERNEL_VENV: config.kernelVenv,

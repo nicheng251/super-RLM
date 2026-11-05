@@ -13,3 +13,6 @@ spikes/logs/
 __pycache__/
 *.pyc
 node_modules/
+
+# local investigation artifacts
+.tmp/

@@ -146,6 +146,22 @@ async def test_prepare_timeout_raises_without_marker(tmp_path):
     assert not (workspace / MARKER_NAME).exists()
 
 
+@pytest.mark.asyncio
+async def test_prepare_cancellation_kills_the_shell(tmp_path):
+    config = make_config(tmp_path, prepare_command="sleep 5")
+    require_shell(config)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    task = asyncio.create_task(prepare_workspace(config, workspace, "tkt_1", "asg_1"))
+    await asyncio.sleep(0.3)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert not (workspace / MARKER_NAME).exists()
+
+
 def test_build_prepare_env_inherits_process_env(tmp_path, monkeypatch):
     monkeypatch.setenv("SUPER_RLM_PREPARE_TEST_INHERITED", "yes")
     config = make_config(tmp_path)

@@ -35,6 +35,7 @@ default Python packages.
 GET  /v1/health
 POST /v1/executions                    # Orchestrator -> Worker
 POST /v1/executions/{id}/cancel
+POST /v1/shutdown                      # Operator -> Worker (worker token)
 POST /internal/assignments/{id}/report # super-rlm-report skill -> Worker
 ```
 
@@ -65,6 +66,25 @@ resume.
     becomes `failed / missing_report`.
 12. The Worker sends assignment heartbeats with the current phase.
 13. `waiting` / `blocked` close ACP but keep the session file for `--resume`.
+
+## Prime Agent daemon
+
+The Worker starts one detached `prime-agent --mode daemon` per project at
+startup and fails startup if the daemon cannot be reached. All Tickets share
+that daemon; a Ticket ACP process is never the daemon owner, so finishing one
+Ticket cannot stop the daemon for another.
+
+The socket is canonicalized once (`abspath`, plus `normcase` on Windows) and the
+same string is used for `PRIME_AGENT_DAEMON_SOCKET`, ACP `--daemon-socket`, and
+every admin command. Admin commands (`status`, `stop`, `shutdown`) take the
+socket from the environment only.
+
+Cancelling or timing out a Ticket stops only that session with
+`prime-agent stop <session-id> --json`, then cancels and terminates its ACP
+process. Worker shutdown stops active Tickets and then runs
+`prime-agent shutdown --force --json` and verifies that no daemon is current.
+`POST /v1/shutdown` requests the same graceful uvicorn shutdown; it does not
+tear down state inside the request handler.
 
 ## Execution profiles
 
@@ -154,6 +174,12 @@ policy writes `<name>.super-rlm-<ticket_id><suffix>` instead of overwriting.
 | `SUPER_RLM_WORKER_PORT` | `8080` | Bind port. |
 | `SUPER_RLM_MAX_CONCURRENCY` | `2` | Concurrent ACP processes. |
 | `SUPER_RLM_HOME` | `~/.super-rlm/projects/default` | Project runtime root. |
+| `SUPER_RLM_PRIME_DAEMON` | `<home>/prime/daemon/worker.sock` | Canonical project daemon socket. |
+| `SUPER_RLM_DAEMON_AUTOSTART` | `true` | Start the project daemon when none is running. |
+| `SUPER_RLM_DAEMON_START_TIMEOUT_S` | `30` | Daemon startup readiness timeout. |
+| `SUPER_RLM_DAEMON_COMMAND_TIMEOUT_S` | `30` | Admin CLI command timeout. |
+| `SUPER_RLM_DAEMON_SHUTDOWN_TIMEOUT_S` | `60` | Daemon shutdown timeout. |
+| `SUPER_RLM_CANCEL_WAIT_S` | `10` | ACP cancel grace before terminating. |
 | `SUPER_RLM_PRIME_AGENT` | repo `runtime/prime-agent` | Prime Agent binary. |
 | `SUPER_RLM_PRIME_PROVIDER` | `fake` | Model provider. |
 | `SUPER_RLM_PRIME_MODEL` | `fake-1` | Model id. |

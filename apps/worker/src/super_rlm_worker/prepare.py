@@ -121,6 +121,9 @@ async def run_shell(
     except asyncio.TimeoutError:
         await _kill(process)
         raise PrepareError(f"command timed out after {timeout_s:g}s: {command}") from None
+    except asyncio.CancelledError:
+        await _kill(process)
+        raise
 
     return process.returncode, output_bytes.decode("utf-8", errors="replace").strip()
 

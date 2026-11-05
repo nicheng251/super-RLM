@@ -17,6 +17,7 @@ from super_rlm_protocol import ExecutionRequest, ReportAck, ReportState, SkillRe
 from . import acp_client
 from .blocked import install_blocked_shims
 from .config import WorkerConfig
+from .daemon import PrimeDaemon
 from .delivery import deliver_artifacts
 from .execution_profile import (
     ExecutionConfigError,
@@ -54,6 +55,10 @@ class InvalidExecution(ValueError):
     """The submitted execution options are malformed."""
 
 
+class WorkerShuttingDown(RuntimeError):
+    """The Worker has begun shutting down and accepts no new executions."""
+
+
 @dataclass
 class ExecutionState:
     execution_id: str
@@ -82,8 +87,14 @@ class ExecutionState:
     terminal_report: SkillReport | None = None
     error: str | None = None
     cancelled: bool = False
+    cancel_reason: str | None = None
+    timed_out: bool = False
+    cleanup_error: str | None = None
+    cleanup_done: bool = False
+    cleanup_session_ref: str | None = None
     done: asyncio.Event = field(default_factory=asyncio.Event)
     report_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    cleanup_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     task: asyncio.Task[None] | None = None
     connection: Any | None = None
     process: Any | None = None
@@ -94,12 +105,19 @@ class ExecutionState:
 
 
 class ExecutionManager:
-    def __init__(self, config: WorkerConfig, forwarder: ReportForwarder) -> None:
+    def __init__(
+        self,
+        config: WorkerConfig,
+        forwarder: ReportForwarder,
+        daemon: PrimeDaemon | None = None,
+    ) -> None:
         self.config = config
         self.forwarder = forwarder
+        self.daemon = daemon if daemon is not None else PrimeDaemon(config)
         self._by_assignment: dict[str, ExecutionState] = {}
         self._by_execution: dict[str, ExecutionState] = {}
         self._running = 0
+        self._shutting_down = False
 
     @property
     def running(self) -> int:
@@ -133,6 +151,8 @@ class ExecutionManager:
         return "running"
 
     async def start(self, request: ExecutionRequest) -> ExecutionState:
+        if self._shutting_down:
+            raise WorkerShuttingDown("worker is shutting down")
         existing = self._by_assignment.get(request.assignment_id)
         if existing is not None:
             return existing
@@ -200,6 +220,9 @@ class ExecutionManager:
                 )
                 agent_cwd = resolve_agent_cwd(state.workspace, plan.agent_cwd)
             except PrepareError as exc:
+                if state.cancelled:
+                    await self._report_terminal(state, self._cancelled_report(state))
+                    return
                 state.error = str(exc)
                 LOG.error("execution %s workspace preparation failed: %s", state.assignment_id, exc)
                 await self._report_terminal(
@@ -212,6 +235,9 @@ class ExecutionManager:
                 )
                 return
             except ExecutionConfigError as exc:
+                if state.cancelled:
+                    await self._report_terminal(state, self._cancelled_report(state))
+                    return
                 state.error = str(exc)
                 await self._report_terminal(
                     state,
@@ -221,6 +247,12 @@ class ExecutionManager:
                         error={"code": "invalid_execution", "message": str(exc)},
                     ),
                 )
+                return
+
+            if state.cancelled:
+                # Cancellation during preparation must never spawn Prime Agent.
+                await self._cleanup_session(state)
+                await self._report_terminal(state, self._cancelled_report(state))
                 return
 
             blocked_bin = install_blocked_shims(state.workspace, plan.blocked_commands)
@@ -247,6 +279,11 @@ class ExecutionManager:
                 state.session_id = await acp_client.new_session(connection, agent_cwd)
                 state.session_ref = await discover_session_ref(state.session_dir, self.config.start_timeout_s)
 
+                if state.cancelled:
+                    await self._cleanup_session(state)
+                    await self._report_terminal(state, self._cancelled_report(state))
+                    return
+
                 prompt_text = state.prompt
                 if state.resume_message:
                     prompt_text = (
@@ -258,12 +295,21 @@ class ExecutionManager:
                     timeout=plan.timeout_s,
                 )
 
+                if state.cancelled:
+                    await self._cleanup_session(state)
+                    await self._report_terminal(state, self._cancelled_report(state))
+                    return
+
                 if state.terminal_report is None:
                     LOG.info("execution %s ended without a terminal report; enforcing", state.assignment_id)
                     await asyncio.wait_for(
                         acp_client.prompt(connection, state.session_id, ENFORCEMENT_PROMPT),
                         timeout=plan.timeout_s,
                     )
+                    if state.cancelled:
+                        await self._cleanup_session(state)
+                        await self._report_terminal(state, self._cancelled_report(state))
+                        return
                     await asyncio.sleep(0.2)
 
                 if state.terminal_report is None:
@@ -276,25 +322,31 @@ class ExecutionManager:
                         ),
                     )
         except asyncio.TimeoutError:
-            await self._report_terminal(
-                state,
-                SkillReport(
-                    state=ReportState.FAILED,
-                    summary="Prime Agent turn timed out",
-                    error={"code": "timeout", "message": "ACP turn exceeded the configured timeout"},
-                ),
-            )
-        except asyncio.CancelledError:
-            if state.terminal_report is None:
+            state.timed_out = True
+            state.error = "ACP turn exceeded the configured timeout"
+            await self._cleanup_session(state)
+            if state.cancelled:
+                await self._report_terminal(state, self._cancelled_report(state))
+            else:
                 await self._report_terminal(
                     state,
-                    SkillReport(state=ReportState.CANCELLED, summary="execution cancelled"),
+                    SkillReport(
+                        state=ReportState.FAILED,
+                        summary="Prime Agent turn timed out",
+                        error={"code": "timeout", "message": "ACP turn exceeded the configured timeout"},
+                    ),
                 )
+        except asyncio.CancelledError:
+            await self._cleanup_session(state)
+            await self._report_terminal(state, self._cancelled_report(state))
             raise
         except Exception as exc:  # noqa: BLE001 - the Worker must report a stable failure
             state.error = str(exc)
             LOG.exception("execution %s failed", state.assignment_id)
-            if state.terminal_report is None:
+            await self._cleanup_session(state)
+            if state.cancelled:
+                await self._report_terminal(state, self._cancelled_report(state))
+            else:
                 await self._report_terminal(
                     state,
                     SkillReport(
@@ -308,6 +360,78 @@ class ExecutionManager:
             state.connection = None
             state.process = None
             state.done.set()
+
+    def _cancelled_report(self, state: ExecutionState) -> SkillReport:
+        reason = state.cancel_reason or "no reason"
+        return SkillReport(
+            state=ReportState.CANCELLED,
+            summary=f"execution cancelled: {reason[:500]}",
+        )
+
+    async def _cleanup_session(self, state: ExecutionState) -> None:
+        """Stop the Ticket's daemon session, then cancel and terminate ACP."""
+        async with state.cleanup_lock:
+            if state.cleanup_done and (
+                state.session_ref is None or state.session_ref == state.cleanup_session_ref
+            ):
+                return
+            errors: list[str] = []
+            if state.session_ref and state.session_ref != state.cleanup_session_ref:
+                session_id = Path(state.session_ref).stem
+                try:
+                    stopped = await self.daemon.stop_session(session_id)
+                    state.cleanup_session_ref = state.session_ref
+                    LOG.info(
+                        "execution %s session %s %s",
+                        state.assignment_id,
+                        session_id,
+                        "stopped" if stopped else "already stopped",
+                    )
+                except Exception as exc:  # noqa: BLE001 - cleanup must not hide the original error
+                    errors.append(f"stop_session: {exc}")
+                    LOG.warning("execution %s stop_session failed: %s", state.assignment_id, exc)
+
+            if not state.cleanup_done:
+                if state.connection is not None and state.session_id is not None:
+                    timeout = min(5.0, max(1.0, self.config.cancel_wait_s))
+                    try:
+                        await asyncio.wait_for(
+                            acp_client.cancel(state.connection, state.session_id),
+                            timeout=timeout,
+                        )
+                    except asyncio.TimeoutError:
+                        LOG.warning("execution %s ACP cancel timed out", state.assignment_id)
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.warning("execution %s ACP cancel failed: %s", state.assignment_id, exc)
+
+                process = state.process
+                if process is not None:
+                    try:
+                        process.terminate()
+                    except ProcessLookupError:
+                        pass
+                    except Exception as exc:  # noqa: BLE001
+                        errors.append(f"ACP terminate: {exc}")
+                    else:
+                        try:
+                            await asyncio.wait_for(
+                                process.wait(),
+                                timeout=min(5.0, max(1.0, self.config.cancel_wait_s)),
+                            )
+                        except asyncio.TimeoutError:
+                            try:
+                                process.kill()
+                            except Exception:  # noqa: BLE001
+                                pass
+                        except Exception:  # noqa: BLE001 - process already gone
+                            pass
+
+            state.cleanup_done = True
+            if errors:
+                message = "; ".join(errors)
+                state.cleanup_error = (
+                    f"{state.cleanup_error}; {message}" if state.cleanup_error else message
+                )
 
     async def _on_event(self, state: ExecutionState, event: dict[str, Any]) -> None:
         # Prime Agent events are logs, not Orchestrator state.
@@ -336,6 +460,8 @@ class ExecutionManager:
         async with state.report_lock:
             if state.terminal_report is not None:
                 return ReportAck(accepted=True, reason="already_terminal")
+            if state.cancelled:
+                return ReportAck(accepted=False, reason="execution_cancelled")
             state.latest_report = report
             state.seq += 1
             if report.state is ReportState.COMPLETED:
@@ -395,20 +521,39 @@ class ExecutionManager:
     async def cancel(self, execution_id: str, reason: str | None = None) -> None:
         state = self.get(execution_id)
         state.cancelled = True
-        if state.connection is not None and state.session_id is not None:
+        state.cancel_reason = reason or state.cancel_reason
+        await self._cleanup_session(state)
+
+        if not state.done.is_set():
             try:
-                await acp_client.cancel(state.connection, state.session_id)
-            except Exception:  # noqa: BLE001
-                LOG.exception("execution %s ACP cancel failed", state.assignment_id)
-        try:
-            await asyncio.wait_for(state.done.wait(), timeout=10)
-        except asyncio.TimeoutError:
-            if state.process is not None:
-                state.process.terminate()
-            await self._report_terminal(
-                state,
-                SkillReport(state=ReportState.CANCELLED, summary=f"execution cancelled: {reason or 'no reason'}"),
-            )
+                await asyncio.wait_for(state.done.wait(), timeout=self.config.cancel_wait_s)
+            except asyncio.TimeoutError:
+                task = state.task
+                if task is not None and not task.done():
+                    task.cancel()
+                    try:
+                        await asyncio.wait_for(task, timeout=self.config.cancel_wait_s)
+                    except (asyncio.TimeoutError, asyncio.CancelledError):
+                        pass
+        await self._report_terminal(state, self._cancelled_report(state))
+
+    async def shutdown(self) -> None:
+        """Cancel active Tickets; the caller stops the shared daemon afterwards."""
+        self._shutting_down = True
+        active = self.active_executions()
+        if not active:
+            return
+        results = await asyncio.gather(
+            *(self.cancel(state.execution_id, "worker shutdown") for state in active),
+            return_exceptions=True,
+        )
+        for state, result in zip(active, results):
+            if isinstance(result, BaseException):
+                LOG.warning(
+                    "execution %s failed to stop during worker shutdown: %s",
+                    state.assignment_id,
+                    result,
+                )
 
     async def _report_terminal(self, state: ExecutionState, report: SkillReport) -> None:
         async with state.report_lock:

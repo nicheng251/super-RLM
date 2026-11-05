@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import secrets
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -16,6 +18,7 @@ from .executor import (
     ExecutionNotFound,
     InvalidExecution,
     InvalidReportToken,
+    WorkerShuttingDown,
 )
 
 
@@ -33,12 +36,19 @@ def create_app(
     manager: ExecutionManager,
     config: WorkerConfig,
     lifespan=None,
+    request_shutdown=None,
 ) -> FastAPI:
     app = FastAPI(title="super-RLM Worker", version="0.1.0", lifespan=lifespan)
+    app.state.request_shutdown = request_shutdown
+    app.state.shutdown_requested = False
 
     @app.exception_handler(AtCapacity)
     async def _at_capacity(_request: Request, exc: AtCapacity):
         return JSONResponse(status_code=409, content={"error": {"code": "at_capacity", "message": str(exc)}})
+
+    @app.exception_handler(WorkerShuttingDown)
+    async def _shutting_down(_request: Request, exc: WorkerShuttingDown):
+        return JSONResponse(status_code=503, content={"error": {"code": "shutting_down", "message": str(exc)}})
 
     @app.exception_handler(ExecutionNotFound)
     async def _not_found(_request: Request, exc: ExecutionNotFound):
@@ -68,6 +78,30 @@ def create_app(
             status_code=202,
             content=ExecutionResponse(execution_id=state.execution_id).model_dump(mode="json"),
         )
+
+    @app.post("/v1/shutdown")
+    async def shutdown(request: Request):
+        token = _bearer(request)
+        if not token:
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "invalid_worker_token", "message": "missing token"},
+            )
+        if not config.worker_token or not secrets.compare_digest(token, config.worker_token):
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "invalid_worker_token", "message": "invalid token"},
+            )
+        callback = getattr(app.state, "request_shutdown", None)
+        if callback is None:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "shutdown_unavailable", "message": "shutdown hook is not configured"},
+            )
+        if not app.state.shutdown_requested:
+            app.state.shutdown_requested = True
+            callback()
+        return {"status": "shutting_down"}
 
     @app.post("/v1/executions/{execution_id}/cancel")
     async def cancel_execution(execution_id: str, body: CancelRequest | None = None):

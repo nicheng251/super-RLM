@@ -6,14 +6,11 @@ prerequisite; it is not bundled in `runtime/`.
 ## Commands
 
 ```bash
-super-rlm                 # one-command start: ensure services, then launch Router
-super-rlm --no-services   # launch Router only
-super-rlm up              # start Orchestrator + Worker in the background
-super-rlm down            # stop background Orchestrator + Worker
-super-rlm status          # show background service health and PIDs
-super-rlm dev             # start Orchestrator + Worker in the foreground
+super-rlm                 # start the L3 terminal UI and its whole local stack
+super-rlm tui             # alias for super-rlm
+super-rlm down            # stop Orchestrator, Worker, and the project Prime daemon
+super-rlm status          # show Orchestrator, Worker, and Prime daemon status
 super-rlm tasks           # headless task list
-super-rlm tui             # launch the L3 terminal UI
 super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
 super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
@@ -25,13 +22,14 @@ super-rlm restore <dir>   # restore an offline backup
 super-rlm config          # print resolved paths and tokens
 ```
 
-The default Router session id is `super-rlm-router-<project_id>`.
+`super-rlm` is the normal entry point. It refuses to start when an Orchestrator,
+Worker, or project Prime Agent daemon is already running; run
+`super-rlm down` first. It never attaches to an existing stack.
 
-`super-rlm` is the normal one-command entry point. It health-checks the
-Orchestrator and Worker, starts any missing service as a detached background
-process, then launches Pi in the foreground. Services keep running when the
-Router exits, so long Tickets are not interrupted. Use `super-rlm down` to stop
-them.
+The TUI owns the stack for its whole lifetime. There is no background start:
+closing or crashing the TUI stops the services. `up`, `router`, `dev`, and
+`--no-services` were removed. `status` and `down` remain for diagnostics and
+cleanup.
 
 ## Examples
 
@@ -39,27 +37,31 @@ them.
 # from the target project
 super-rlm init
 super-rlm doctor
-
-# terminal 1
-super-rlm dev
-
-# terminal 2
 super-rlm
 ```
 
 Set a non-default runtime root explicitly:
 
 ```bash
-SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm dev
 SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm
 ```
 
 ## Terminal UI
 
-`super-rlm tui` starts the Orchestrator and Worker when needed, then launches
-the standalone L3 terminal UI from `apps/tui`. The UI reads the same
-`SUPER_RLM_*` configuration as the CLI and chats with the Router through the
-project Pi runtime. The default `super-rlm` command remains the Pi Router (L2).
+`super-rlm` starts the Orchestrator and Worker, then launches the standalone L3
+terminal UI from `apps/tui`. The UI reads the same `SUPER_RLM_*` configuration
+as the CLI and chats with the Router through the project Pi runtime.
+
+On Windows, a Python Job supervisor creates a Job Object with
+`KILL_ON_JOB_CLOSE` and starts the Orchestrator, Worker, and TUI inside it. The
+Worker starts the Prime Agent daemon, so the daemon inherits the Job. When the
+TUI exits normally, the supervisor cancels active Tasks, asks the Worker to
+stop its sessions, runs `prime-agent shutdown --force`, stops the Worker and
+Orchestrator, and closes the Job. If the TUI crashes, closing the Job kills every
+remaining member. If the Job APIs are unavailable, startup fails closed.
+
+The supervisor Python defaults to the Worker venv. Override it with
+`SUPER_RLM_SUPERVISOR_PYTHON`.
 
 ## Bootstrap
 
@@ -156,29 +158,28 @@ backup in a temporary directory, renames the current home to
 backup excluded secrets, the current `<home>/secrets` is copied into the
 restored home.
 
-## Background services
+## Diagnostics and cleanup
 
-`up` writes:
+`status` checks `/health` and `/v1/health`, reports the PIDs from the last run,
+and reads `prime-agent status --json` with the project daemon environment.
+It also shows the TUI supervisor PID while a TUI-owned stack is running.
 
-```text
-<home>/orchestrator/orchestrator.pid
-<home>/orchestrator/orchestrator.log
-<home>/worker/worker.pid
-<home>/worker/worker.log
-```
+`down` first terminates a running TUI supervisor. Closing its Job removes the
+TUI and all of its children, including the Prime Agent daemon. It then stops any
+leftover Worker and Orchestrator, removes their PID files, and runs
+`prime-agent shutdown --force` for the project daemon.
 
-`status` checks `/health` and `/v1/health`; `down` sends SIGTERM and removes the
-PID files.
-
-## What `dev` starts
+The supervisor starts:
 
 ```text
 Orchestrator: node apps/orchestrator/src/main.ts
 Worker:       apps/worker/.venv/Scripts/python.exe -m super_rlm_worker.main
+TUI:          node apps/tui/src/main.ts
 ```
 
-Both inherit the resolved `SUPER_RLM_*` configuration. `super-rlm dev` does not
-create the project kernel venv; `super-rlm doctor` reports when it is missing.
+All three inherit the resolved `SUPER_RLM_*` configuration. Neither start nor
+`down` creates the project kernel venv; `super-rlm doctor` reports when it is
+missing.
 
 ## Router isolation
 
@@ -209,6 +210,8 @@ No built-in tools are registered. The extension is the only tool source.
 | `SUPER_RLM_PRIME_MODEL` | `fake-1` | Prime model id. |
 | `SUPER_RLM_KERNEL_VENV` | `<home>/prime/kernel-venv` | Prime kernel venv. |
 | `SUPER_RLM_KERNEL_PYTHON` | venv python | Prime kernel Python. |
+| `SUPER_RLM_PRIME_DAEMON` | `<home>/prime/daemon/worker.sock` | Project Prime daemon socket. |
+| `SUPER_RLM_SUPERVISOR_PYTHON` | Worker venv python | Python used for the Windows Job supervisor. |
 | `NODE_BIN` | `node` | Node executable for `bin/super-rlm`. |
 
 ## Tests
