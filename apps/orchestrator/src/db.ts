@@ -18,7 +18,7 @@ import type {
 
 type Row = Record<string, unknown>;
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS tickets (
   not_before TEXT,
   priority_next INTEGER NOT NULL DEFAULT 0,
   resume_message TEXT,
+  delivered_to TEXT NOT NULL DEFAULT '[]',
+  delivery_error TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -176,6 +178,11 @@ export class Store {
       this.ensureColumn("tickets", "resume_message", "TEXT");
       return;
     }
+    if (version === 3) {
+      this.ensureColumn("tickets", "delivered_to", "TEXT NOT NULL DEFAULT '[]'");
+      this.ensureColumn("tickets", "delivery_error", "TEXT");
+      return;
+    }
     // Version 1 is the base schema above.
   }
 
@@ -217,8 +224,8 @@ export class Store {
         INSERT INTO tickets (
           ticket_id, task_id, title, prompt, profile, status, summary, result, artifacts, usage,
           error, question, session_key, session_ref, outcome, no_op, retry_count, not_before,
-          priority_next, resume_message, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          priority_next, resume_message, delivered_to, delivery_error, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const ticket of tickets) {
         insertTicket.run(
@@ -230,6 +237,7 @@ export class Store {
           ticket.session_key, ticket.session_ref, ticket.outcome,
           ticket.no_op === null ? null : ticket.no_op ? 1 : 0,
           ticket.retry_count, ticket.not_before, ticket.priority_next ? 1 : 0, ticket.resume_message,
+          JSON.stringify(ticket.delivered_to), ticket.delivery_error,
           ticket.created_at, ticket.updated_at,
         );
       }
@@ -271,7 +279,7 @@ export class Store {
   updateTicket(ticketId: string, patch: Partial<TicketRecord>): void {
     const fields: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(patch)) {
-      if (key === "artifacts" || key === "usage" || key === "error" || key === "question") {
+      if (key === "artifacts" || key === "usage" || key === "error" || key === "question" || key === "delivered_to") {
         fields[key] = value === null ? null : JSON.stringify(value);
       } else if (key === "no_op") {
         fields[key] = value === null ? null : value ? 1 : 0;
@@ -524,6 +532,8 @@ function ticketFromRow(row: Row): TicketRecord {
     not_before: row.not_before === null ? null : String(row.not_before),
     priority_next: Number(row.priority_next) === 1,
     resume_message: row.resume_message === null ? null : String(row.resume_message),
+    delivered_to: parseJson(row.delivered_to, []),
+    delivery_error: row.delivery_error === null ? null : String(row.delivery_error),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };

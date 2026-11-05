@@ -114,3 +114,43 @@ def test_event_requires_positive_id():
             "type": "ticket.waiting",
             "created_at": "2026-11-03T00:00:00Z",
         })
+
+def test_execution_request_origin_cwd_defaults_to_none():
+    request = m.ExecutionRequest.model_validate({
+        "ticket_id": "tkt_1",
+        "assignment_id": "asg_1",
+        "prompt": "do it",
+        "workspace": "/tmp/workspaces/tkt_1",
+    })
+    assert request.origin_cwd is None
+    explicit = m.ExecutionRequest.model_validate({
+        "ticket_id": "tkt_1",
+        "assignment_id": "asg_1",
+        "prompt": "do it",
+        "workspace": "/tmp/workspaces/tkt_1",
+        "origin_cwd": "/tmp/user/launch",
+    })
+    assert explicit.origin_cwd == "/tmp/user/launch"
+
+
+def test_report_and_ticket_results_default_delivery_fields():
+    report = m.WorkerReport.model_validate(make_report())
+    assert report.delivered_to == []
+    assert report.delivery_error is None
+    delivered = m.WorkerReport.model_validate(make_report(
+        delivered_to=["/tmp/user/launch/out.txt"],
+        delivery_error="one artifact was skipped",
+    ))
+    assert delivered.delivered_to == ["/tmp/user/launch/out.txt"]
+    assert delivered.delivery_error == "one artifact was skipped"
+
+    summary = m.TicketSummary.model_validate(make_ticket_summary())
+    assert summary.delivered_to == []
+    assert summary.delivery_error is None
+    result = m.TicketResult.model_validate({
+        "ticket_id": "tkt_1",
+        "status": "succeeded",
+        "artifacts": [],
+    })
+    assert result.delivered_to == []
+    assert result.delivery_error is None

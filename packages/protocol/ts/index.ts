@@ -145,6 +145,8 @@ export interface TicketSummary {
   workspace?: string | null;
   branch?: string | null;
   commit?: string | null;
+  delivered_to: string[];
+  delivery_error: string | null;
 }
 
 export interface TicketResult {
@@ -161,6 +163,8 @@ export interface TicketResult {
   workspace?: string | null;
   branch?: string | null;
   commit?: string | null;
+  delivered_to: string[];
+  delivery_error: string | null;
 }
 
 export interface TaskView {
@@ -276,6 +280,7 @@ export interface ExecutionRequest {
   prompt: string;
   profile: string;
   workspace: string;
+  origin_cwd?: string | null;
   deadline?: string | null;
   resume?: ResumeSpec | null;
 }
@@ -319,6 +324,8 @@ export interface WorkerReport {
   resumed?: boolean | null;
   recovery?: boolean | null;
   question?: Question | null;
+  delivered_to?: string[];
+  delivery_error?: string | null;
   timestamp: string;
 }
 

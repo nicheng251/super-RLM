@@ -113,3 +113,16 @@ def test_skill_report_schema_requires_question_for_blocked():
         "summary": "waiting on credentials",
         "question": {"kind": "blocked", "text": "Configure the token."},
     })
+
+def test_schema_exposes_delivery_fields():
+    report_schema = SCHEMA["$defs"]["WorkerReport"]["properties"]
+    assert "delivered_to" in report_schema
+    assert "delivery_error" in report_schema
+    ticket_schema = SCHEMA["$defs"]["TicketSummary"]["properties"]
+    assert "delivered_to" in ticket_schema
+    assert "delivery_error" in ticket_schema
+    execution_schema = SCHEMA["$defs"]["ExecutionRequest"]["properties"]
+    assert "origin_cwd" in execution_schema
+    validator("WorkerReport").validate(report_payload(
+        delivered_to=["/tmp/user/launch/out.txt"], delivery_error="skipped",
+    ))

@@ -145,6 +145,8 @@ class TicketSummary(BaseModel):
     workspace: str | None = None
     branch: str | None = None
     commit: str | None = None
+    delivered_to: list[str] = Field(default_factory=list)
+    delivery_error: str | None = None
 
 
 class TicketResult(BaseModel):
@@ -163,6 +165,8 @@ class TicketResult(BaseModel):
     workspace: str | None = None
     branch: str | None = None
     commit: str | None = None
+    delivered_to: list[str] = Field(default_factory=list)
+    delivery_error: str | None = None
 
 
 class TaskView(BaseModel):
@@ -316,6 +320,7 @@ class ExecutionRequest(BaseModel):
     prompt: str = Field(min_length=1)
     profile: str = "default"
     workspace: str = Field(min_length=1)
+    origin_cwd: str | None = None
     deadline: datetime | None = None
     resume: ResumeSpec | None = None
 
@@ -369,6 +374,8 @@ class WorkerReport(BaseModel):
     resumed: bool | None = None
     recovery: bool | None = None
     question: Question | None = None
+    delivered_to: list[str] = Field(default_factory=list)
+    delivery_error: str | None = None
     timestamp: datetime
 
     @model_validator(mode="after")

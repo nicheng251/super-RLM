@@ -19,7 +19,7 @@ export async function runRouter(config: CliConfig, options: RouterOptions = {}):
   return await new Promise<number>((resolve) => {
     const child = spawn(process.execPath, [config.piCli, ...args], {
       cwd: config.routerDir,
-      env: routerEnv(config),
+      env: routerEnv(config, process.cwd()),
       stdio: "inherit",
     });
     child.on("error", (error) => {

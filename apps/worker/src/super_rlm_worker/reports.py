@@ -36,6 +36,8 @@ def build_worker_report(
     seq: int,
     session_ref: str | None,
     report: SkillReport,
+    delivered_to: list[str] | None = None,
+    delivery_error: str | None = None,
 ) -> WorkerReport:
     return WorkerReport(
         ticket_id=ticket_id,
@@ -50,6 +52,8 @@ def build_worker_report(
         error=report.error,
         session_ref=session_ref,
         question=report.question,
+        delivered_to=delivered_to or [],
+        delivery_error=delivery_error,
         timestamp=datetime.now(timezone.utc),
     )
 

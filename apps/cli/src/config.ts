@@ -173,7 +173,7 @@ export function buildRouterArgs(config: CliConfig, options: RouterOptions = {}):
   return args;
 }
 
-export function routerEnv(config: CliConfig): NodeJS.ProcessEnv {
+export function routerEnv(config: CliConfig, originCwd: string = process.cwd()): NodeJS.ProcessEnv {
   return {
     ...process.env,
     PI_CODING_AGENT_DIR: join(config.home, "pi", "agent"),
@@ -181,6 +181,7 @@ export function routerEnv(config: CliConfig): NodeJS.ProcessEnv {
     SUPER_RLM_ORCHESTRATOR_URL: config.orchestratorUrl,
     SUPER_RLM_ROUTER_TOKEN: config.routerToken,
     SUPER_RLM_HOME: config.home,
+    SUPER_RLM_ORIGIN_CWD: originCwd,
   };
 }
 

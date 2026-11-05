@@ -16,6 +16,13 @@ def _bool_env(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _choice_env(source: dict[str, str], name: str, default: str, allowed: set[str]) -> str:
+    value = source.get(name, default).strip().lower()
+    if value not in allowed:
+        raise ValueError(f"{name} must be one of {sorted(allowed)}, got {value!r}")
+    return value
+
+
 def _default_bash_shell() -> str | None:
     if os.name == "nt":
         candidate = Path("C:/Program Files/Git/bin/bash.exe")
@@ -47,6 +54,9 @@ class WorkerConfig:
     prepare_command: str | None
     prepare_timeout_s: float
     project_repo: str | None
+    delivery_mode: str
+    delivery_collision: str
+    delivery_strip_prefix: str
     report_skill: Path
     worker_prompt: Path
     workspace_root: Path
@@ -89,6 +99,9 @@ class WorkerConfig:
             prepare_command=source.get("SUPER_RLM_PREPARE_COMMAND") or None,
             prepare_timeout_s=float(source.get("SUPER_RLM_PREPARE_TIMEOUT_S", "600")),
             project_repo=source.get("SUPER_RLM_PROJECT_REPO") or None,
+            delivery_mode=_choice_env(source, "SUPER_RLM_DELIVERY_MODE", "artifacts", {"artifacts", "workspace", "none"}),
+            delivery_collision=_choice_env(source, "SUPER_RLM_DELIVERY_COLLISION", "version", {"version", "overwrite", "error"}),
+            delivery_strip_prefix=source.get("SUPER_RLM_DELIVERY_STRIP_PREFIX", ""),
             report_skill=Path(source.get("SUPER_RLM_REPORT_SKILL", _repo_root() / "apps" / "worker" / "skills" / "super-rlm-report")),
             worker_prompt=Path(source.get("SUPER_RLM_WORKER_PROMPT", _repo_root() / "apps" / "worker" / "prompts" / "worker.md")),
             workspace_root=Path(source.get("SUPER_RLM_WORKSPACES", home / "workspaces")),

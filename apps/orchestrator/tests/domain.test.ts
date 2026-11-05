@@ -94,6 +94,8 @@ function ticketRecord(ticketId: string): TicketRecord {
     not_before: null,
     priority_next: false,
     resume_message: null,
+    delivered_to: [],
+    delivery_error: null,
     created_at: "2026-11-05T00:00:00Z",
     updated_at: "2026-11-05T00:00:01Z",
   };

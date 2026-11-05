@@ -16,6 +16,7 @@ from super_rlm_protocol import ExecutionRequest, ReportAck, ReportState, SkillRe
 
 from . import acp_client
 from .config import WorkerConfig
+from .delivery import deliver_artifacts
 from .prepare import PrepareError, prepare_workspace
 from .prime_agent import discover_session_ref, session_dir_for
 from .reports import ReportForwarder, TERMINAL_STATES, build_worker_report
@@ -53,6 +54,9 @@ class ExecutionState:
     report_token: str
     report_url: str
     report_config: Path
+    origin_cwd: str | None = None
+    delivered_to: list[str] = field(default_factory=list)
+    delivery_error: str | None = None
     resume_ref: str | None = None
     resume_message: str | None = None
     seq: int = 0
@@ -150,6 +154,7 @@ class ExecutionManager:
             report_token=report_token,
             report_url=report_url,
             report_config=report_config,
+            origin_cwd=getattr(request, "origin_cwd", None),
             resume_ref=request.resume.session_ref if request.resume else None,
             resume_message=request.resume.message if request.resume else None,
         )
@@ -289,6 +294,16 @@ class ExecutionManager:
                 return ReportAck(accepted=True, reason="already_terminal")
             state.latest_report = report
             state.seq += 1
+            if report.state is ReportState.COMPLETED:
+                delivery = deliver_artifacts(
+                    state.workspace,
+                    state.origin_cwd,
+                    report.artifacts,
+                    self.config,
+                    state.ticket_id,
+                )
+                state.delivered_to = delivery.delivered_to
+                state.delivery_error = delivery.error
             worker_report = build_worker_report(
                 ticket_id=state.ticket_id,
                 assignment_id=state.assignment_id,
@@ -296,6 +311,8 @@ class ExecutionManager:
                 seq=state.seq,
                 session_ref=state.session_ref,
                 report=report,
+                delivered_to=state.delivered_to,
+                delivery_error=state.delivery_error,
             )
             ack = await self.forwarder.forward(worker_report)
             if report.state in TERMINAL_STATES:
@@ -332,6 +349,8 @@ class ExecutionManager:
                 seq=state.seq,
                 session_ref=state.session_ref,
                 report=report,
+                delivered_to=state.delivered_to,
+                delivery_error=state.delivery_error,
             )
             try:
                 await self.forwarder.forward(worker_report)

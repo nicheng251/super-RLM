@@ -185,6 +185,12 @@ class TaskDetailComponent {
         if (ticket.workspace) body.push(`workspace: ${truncateToWidth(ticket.workspace, Math.max(20, width - 6))}`);
         if (ticket.branch) body.push(`branch: ${ticket.branch}`);
         if (ticket.commit) body.push(`commit: ${ticket.commit}`);
+        if (ticket.delivered_to.length > 0) {
+          body.push(`delivered: ${truncateToWidth(ticket.delivered_to.join(", "), Math.max(20, width - 6))}`);
+        }
+        if (ticket.delivery_error) {
+          body.push(this.theme.fg("error", `delivery error: ${truncateToWidth(ticket.delivery_error, Math.max(20, width - 6))}`));
+        }
         if (ticket.summary) body.push(`summary: ${ticket.summary}`);
         if (ticket.question) body.push(this.theme.fg("warning", `question: ${ticket.question.text}`));
         if (ticket.error) body.push(this.theme.fg("error", `error: ${ticket.error.code}: ${ticket.error.message}`));

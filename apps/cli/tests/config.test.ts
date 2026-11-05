@@ -12,6 +12,7 @@ import {
   orchestratorEnv,
   readModelDefault,
   readProjectId,
+  routerEnv,
   workerEnv,
 } from "../src/config.ts";
 
@@ -34,6 +35,11 @@ test("buildRouterArgs pins the project session and control-plane guard flags", (
   assert.ok(args[args.indexOf("--append-system-prompt") + 1].endsWith("router.md"));
   assert.equal(args[args.indexOf("--session-id") + 1], "super-rlm-router-default");
   assert.equal(args.at(-1), "hello");
+});
+
+test("routerEnv records the directory the user launched from", () => {
+  const config = loadConfig({ env: { SUPER_RLM_HOME: "/tmp/super-rlm-home" }, cwd: tmpdir() });
+  assert.equal(routerEnv(config, "/tmp/user/launch").SUPER_RLM_ORIGIN_CWD, "/tmp/user/launch");
 });
 
 test("--new drops the fixed session id", () => {

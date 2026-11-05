@@ -164,7 +164,9 @@ Response:
       "error": null,
       "workspace": "/data/workspaces/tkt_...",
       "branch": "agent/tkt_...",
-      "commit": "abc123"
+      "commit": "abc123",
+      "delivered_to": ["/home/user/output/out.md"],
+      "delivery_error": null
     }
   ]
 }
@@ -212,13 +214,17 @@ Response:
   "session_ref": "prime-session-...",
   "workspace": "/data/workspaces/tkt_...",
   "branch": "agent/tkt_...",
-  "commit": "abc123"
+  "commit": "abc123",
+  "delivered_to": ["/home/user/output/out.md"],
+  "delivery_error": null
 }
 ```
 
 `max_chars` bounds the returned `result`; the full result remains in Orchestrator storage.
 `workspace` is the runtime workspace path. `branch` and `commit` are read from
 the workspace git checkout and are `null` when it is not a git repository.
+`delivered_to` lists files copied to the Task's `origin_cwd`; `delivery_error`
+is non-null when that copy failed.
 
 ## 8. ticket_answer
 

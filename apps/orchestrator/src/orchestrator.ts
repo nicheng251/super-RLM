@@ -219,6 +219,8 @@ export class Orchestrator {
         not_before: null,
         priority_next: false,
         resume_message: null,
+        delivered_to: [],
+        delivery_error: null,
         created_at: now,
         updated_at: now,
       };
@@ -458,6 +460,8 @@ export class Orchestrator {
       session_ref: report.session_ref ?? ticket.session_ref,
       outcome: outcome.outcome ?? ticket.outcome,
       no_op: outcome.noOp ?? ticket.no_op,
+      delivered_to: report.delivered_to ?? [],
+      delivery_error: report.delivery_error ?? null,
       updated_at: nowIso(),
     });
     if (assignment.worker_id) {
@@ -550,6 +554,10 @@ export class Orchestrator {
   }
 
   private async tryStart(ticket: TicketRecord, kind: AssignmentKind): Promise<boolean> {
+    const task = this.store.getTask(ticket.task_id);
+    const originCwd = typeof task?.metadata?.origin_cwd === "string" && task.metadata.origin_cwd.trim()
+      ? task.metadata.origin_cwd
+      : null;
     const workers = this.store.listWorkers().filter((worker) => worker.status === "healthy");
     for (const worker of workers) {
       const counts = this.countsFor(ticket, kind);
@@ -583,6 +591,7 @@ export class Orchestrator {
         prompt: ticket.prompt,
         profile: ticket.profile,
         workspace: `${this.config.workspaceRoot}/${ticket.ticket_id}`,
+        origin_cwd: originCwd,
         deadline: null,
         resume: ticket.session_ref
           ? { session_ref: ticket.session_ref, message: ticket.resume_message ?? undefined }

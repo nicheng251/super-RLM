@@ -157,7 +157,7 @@ export default function (pi: ExtensionAPI) {
         const body = {
           prompt: params.task_prompt,
           tickets: params.tickets.map((t) => ({ ...t, profile: t.profile ?? "default", metadata: {} })),
-          metadata: {},
+          metadata: { origin_cwd: process.env.SUPER_RLM_ORIGIN_CWD ?? null },
         };
         const created = await call("POST", "/v1/tasks", body) as Record<string, unknown>;
         return ok({

@@ -89,6 +89,34 @@ Then call super_rlm_report with:
 `task_create` returns immediately. Do not call `task_wait`; the Router receives
 an SSE notification when the Task settles.
 
+
+## Result delivery
+
+The CLI captures the directory where you launched it as `SUPER_RLM_ORIGIN_CWD`.
+The Router stores it on the Task, and the Worker copies a completed Ticket's
+reported artifacts back to that directory.
+
+```powershell
+$env:SUPER_RLM_DELIVERY_MODE="artifacts"      # artifacts | workspace | none
+$env:SUPER_RLM_DELIVERY_COLLISION="version"   # version | overwrite | error
+$env:SUPER_RLM_DELIVERY_STRIP_PREFIX="repo"   # optional, e.g. for worktrees
+```
+
+- `artifacts` copies only the files reported in `artifacts`.
+- `workspace` copies the whole workspace to
+  `<origin>/.super-rlm/<ticket_id>/`.
+- `none` disables automatic delivery.
+- `version` keeps an existing file and writes
+  `<name>.super-rlm-<ticket_id><suffix>` instead.
+- `strip_prefix: repo` turns `repo/hello.txt` into `hello.txt` in the origin
+  directory.
+- Delivery failures do not fail the Ticket; they appear as `delivery_error`
+  and the workspace remains available.
+
+For a project checkout, code changes are usually reviewed through the branch
+and worktree. Delivery is most useful for reports, generated files, and small
+deliverables.
+
 ## 4. Review and merge
 
 The result includes:

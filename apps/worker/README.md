@@ -87,6 +87,24 @@ resume, retry, and reassignment skip it. Delete the marker to run the command
 again. A nonzero exit or a timeout fails the Ticket with error code
 `prepare_failed`, and Prime Agent is never started.
 
+## Result delivery
+
+When a Ticket reports `completed`, the Worker copies its reported artifacts
+back to the directory where the Router was launched (`origin_cwd`, carried in
+the assignment). Delivery is best-effort: a failure is recorded in the report
+as `delivery_error` and never changes the Ticket state.
+
+- `artifacts` (default) copies each reported file, preserving its relative
+  path after an optional prefix strip.
+- `workspace` copies the whole Ticket workspace to
+  `<origin_cwd>/.super-rlm/<ticket_id>/`, excluding `.git`,
+  `.super-rlm-report.json`, and `.super-rlm-prepared`.
+- `none` disables delivery.
+
+Absolute paths, `..` path segments, and paths that resolve outside the
+workspace or origin directory are rejected. The default `version` collision
+policy writes `<name>.super-rlm-<ticket_id><suffix>` instead of overwriting.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -107,6 +125,9 @@ again. A nonzero exit or a timeout fails the Ticket with error code
 | `SUPER_RLM_PROJECT_REPO` | unset | Source checkout used by workspace preparation. |
 | `SUPER_RLM_PREPARE_COMMAND` | unset | One-time workspace preparation command. |
 | `SUPER_RLM_PREPARE_TIMEOUT_S` | `600` | Workspace preparation timeout. |
+| `SUPER_RLM_DELIVERY_MODE` | `artifacts` | `artifacts`, `workspace`, or `none`. |
+| `SUPER_RLM_DELIVERY_COLLISION` | `version` | `version`, `overwrite`, or `error`. |
+| `SUPER_RLM_DELIVERY_STRIP_PREFIX` | unset | Artifact path prefix removed on delivery. |
 | `SUPER_RLM_REPORT_SKILL` | repo skill dir | `super-rlm-report` skill path. |
 | `SUPER_RLM_WORKER_PROMPT` | repo prompt | Appended Worker system prompt. |
 | `SUPER_RLM_TURN_TIMEOUT_S` | `3600` | Per-ACP-turn timeout. |

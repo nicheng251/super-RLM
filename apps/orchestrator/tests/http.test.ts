@@ -94,6 +94,8 @@ test("HTTP router and worker routes complete a ticket", async () => {
       summary: "done",
       result: "ok",
       artifacts: [],
+      delivered_to: ["/tmp/user/launch/out.txt"],
+      delivery_error: "one artifact was skipped",
       timestamp: new Date().toISOString(),
     });
     const unsigned = await fetch(`${base}/internal/v1/reports`, {
@@ -113,9 +115,13 @@ test("HTTP router and worker routes complete a ticket", async () => {
     const resultResponse = await fetch(`${base}/v1/tickets/${ticketId}/result`, {
       headers: { authorization: "Bearer router-token" },
     });
-    const result = await resultResponse.json() as { status: string; result: string };
+    const result = await resultResponse.json() as {
+      status: string; result: string; delivered_to: string[]; delivery_error: string | null;
+    };
     assert.equal(result.status, "succeeded");
     assert.equal(result.result, "ok");
+    assert.deepEqual(result.delivered_to, ["/tmp/user/launch/out.txt"]);
+    assert.equal(result.delivery_error, "one artifact was skipped");
 
     const unauthorized = await fetch(`${base}/v1/tasks/${created.task_id}`);
     assert.equal(unauthorized.status, 401);

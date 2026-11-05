@@ -62,6 +62,8 @@ export interface TicketRecord {
   not_before: string | null;
   priority_next: boolean;
   resume_message: string | null;
+  delivered_to: string[];
+  delivery_error: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -277,6 +279,8 @@ export function ticketSummary(ticket: TicketRecord, workspaceRoot?: string): Tic
     workspace,
     branch: git?.branch ?? null,
     commit: git?.commit ?? null,
+    delivered_to: ticket.delivered_to,
+    delivery_error: ticket.delivery_error,
   };
 }
 
@@ -297,5 +301,7 @@ export function ticketResult(ticket: TicketRecord, maxChars = 20000, workspaceRo
     workspace: workspace?.workspace ?? null,
     branch: workspace?.branch ?? null,
     commit: workspace?.commit ?? null,
+    delivered_to: ticket.delivered_to,
+    delivery_error: ticket.delivery_error,
   };
 }

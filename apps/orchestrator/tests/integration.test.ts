@@ -64,6 +64,7 @@ test("two tickets run within the per-task cap, then a waiting ticket resumes wit
   });
 
   assert.equal(calls.length, 2);
+  assert.equal(calls[0].origin_cwd, null);
   assert.equal(orchestrator.getTask(created.task_id).status, "running");
 
   const firstTicket = created.tickets[0].ticket_id;
@@ -73,10 +74,22 @@ test("two tickets run within the per-task cap, then a waiting ticket resumes wit
 
   const completed = await orchestrator.handleReport(report(
     firstTicket, firstAssignment.assignment_id, 1, "completed",
-    { summary: "first done", result: "ok" },
+    {
+      summary: "first done",
+      result: "ok",
+      delivered_to: ["/tmp/user/launch/out.txt"],
+      delivery_error: "one artifact was skipped",
+    },
   ));
   assert.deepEqual(completed, { accepted: true });
-  assert.equal(orchestrator.getTicketResult(firstTicket).status, "succeeded");
+  const firstResult = orchestrator.getTicketResult(firstTicket);
+  assert.equal(firstResult.status, "succeeded");
+  assert.deepEqual(firstResult.delivered_to, ["/tmp/user/launch/out.txt"]);
+  assert.equal(firstResult.delivery_error, "one artifact was skipped");
+  const firstSummary = orchestrator.getTask(created.task_id).tickets
+    .find((ticket) => ticket.ticket_id === firstTicket);
+  assert.deepEqual(firstSummary?.delivered_to, ["/tmp/user/launch/out.txt"]);
+  assert.equal(firstSummary?.delivery_error, "one artifact was skipped");
 
   const duplicate = await orchestrator.handleReport(report(
     firstTicket, firstAssignment.assignment_id, 1, "completed",

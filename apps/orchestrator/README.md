@@ -68,7 +68,7 @@ POST /internal/v1/reports
 
 - Task/Ticket/Assignment state machine and derived Task status.
 - SQLite persistence with WAL and a schema-version row.
-- Forward-only migrations with a schema-version row (currently v2).
+- Forward-only migrations with a schema-version row (currently v3).
 - Single-instance lock file with stale-PID recovery.
 - Startup recovery for assignments left open by a previous Orchestrator process.
 - Global, per-Task, per-Worker, and priority slot accounting.

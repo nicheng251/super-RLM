@@ -310,6 +310,18 @@
           "title": "Workspace",
           "type": "string"
         },
+        "origin_cwd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Origin Cwd"
+        },
         "deadline": {
           "anyOf": [
             {
@@ -1265,6 +1277,25 @@
           ],
           "default": null,
           "title": "Commit"
+        },
+        "delivered_to": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Delivered To",
+          "type": "array"
+        },
+        "delivery_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery Error"
         }
       },
       "required": [
@@ -1462,6 +1493,25 @@
           ],
           "default": null,
           "title": "Commit"
+        },
+        "delivered_to": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Delivered To",
+          "type": "array"
+        },
+        "delivery_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery Error"
         }
       },
       "required": [
@@ -1729,6 +1779,25 @@
             }
           ],
           "default": null
+        },
+        "delivered_to": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Delivered To",
+          "type": "array"
+        },
+        "delivery_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivery Error"
         },
         "timestamp": {
           "format": "date-time",

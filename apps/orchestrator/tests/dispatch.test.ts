@@ -40,6 +40,7 @@ test("the default dispatch posts the ExecutionRequest contract to a Worker", asy
     const created = await orchestrator.createTask({
       prompt: "remote dispatch",
       tickets: [{ title: "remote", prompt: "do it" }],
+      metadata: { origin_cwd: "/tmp/user/launch" },
     });
     assert.equal(requests.length, 1);
     const request = requests[0];
@@ -47,6 +48,7 @@ test("the default dispatch posts the ExecutionRequest contract to a Worker", asy
     assert.equal(request.ticket_id, ticketId);
     assert.equal(request.profile, "default");
     assert.equal(request.workspace, `/tmp/super-rlm/workspaces/${ticketId}`);
+    assert.equal(request.origin_cwd, "/tmp/user/launch");
 
     const assignment = store.getActiveAssignment(ticketId);
     assert.ok(assignment);
