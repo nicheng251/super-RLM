@@ -23,6 +23,17 @@ def _choice_env(source: dict[str, str], name: str, default: str, allowed: set[st
     return value
 
 
+def _required_secret(source: dict[str, str], name: str, home: Path) -> str:
+    """Read a required API secret; direct service startup must fail closed."""
+    value = source.get(name, "").strip()
+    if not value:
+        raise ValueError(
+            f"{name} is required. Run `super-rlm` to generate local secrets, "
+            f"or add {name} to {home / 'secrets' / 'api.env'}."
+        )
+    return value
+
+
 LOOPBACK_HOSTS = {"127.0.0.1", "::1"}
 
 
@@ -124,7 +135,7 @@ class WorkerConfig:
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "WorkerConfig":
-        source = env or os.environ
+        source = env if env is not None else os.environ
         home = Path(source.get("SUPER_RLM_HOME", str(Path.home() / ".super-rlm" / "projects" / "default")))
         kernel_venv = Path(source.get("SUPER_RLM_KERNEL_VENV", home / "prime" / "kernel-venv"))
         kernel_python = source.get("SUPER_RLM_KERNEL_PYTHON")
@@ -145,7 +156,7 @@ class WorkerConfig:
         return cls(
             orchestrator_url=source.get("SUPER_RLM_ORCHESTRATOR_URL", "http://127.0.0.1:8787").rstrip("/"),
             worker_id=worker_id,
-            worker_token=source.get("SUPER_RLM_WORKER_TOKEN", "dev-worker-token"),
+            worker_token=_required_secret(source, "SUPER_RLM_WORKER_TOKEN", home),
             host=loopback_host(source.get("SUPER_RLM_WORKER_HOST", "127.0.0.1")),
             port=int(source.get("SUPER_RLM_WORKER_PORT", "8080")),
             max_concurrency=max(1, int(source.get("SUPER_RLM_MAX_CONCURRENCY", "2"))),
@@ -178,7 +189,7 @@ class WorkerConfig:
             turn_timeout_s=float(source.get("SUPER_RLM_TURN_TIMEOUT_S", "3600")),
             metadata_timeout_s=float(source.get("SUPER_RLM_METADATA_TIMEOUT_S", "60")),
             report_token_ttl_s=float(source.get("SUPER_RLM_REPORT_TOKEN_TTL_S", "7200")),
-            callback_key=source.get("SUPER_RLM_CALLBACK_KEY", "dev-callback-key"),
+            callback_key=_required_secret(source, "SUPER_RLM_CALLBACK_KEY", home),
             assignment_heartbeat_interval_s=float(source.get("SUPER_RLM_ASSIGNMENT_HEARTBEAT_INTERVAL_S", "10")),
         )
 

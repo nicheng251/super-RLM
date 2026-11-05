@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { loadConfig } from "../src/config.ts";
 import { Store } from "../src/db.ts";
+import { TEST_CALLBACK_KEY, testEnv } from "./env.ts";
 import type { OutboxRecord } from "../src/db.ts";
 import { Orchestrator } from "../src/orchestrator.ts";
 import type { DispatchFn } from "../src/orchestrator.ts";
@@ -255,18 +256,18 @@ test("no callback URL means the dispatcher is a no-op", async () => {
 });
 
 test("config parses callback URL and key from the environment", () => {
-  const defaults = loadConfig({} as NodeJS.ProcessEnv);
+  const defaults = loadConfig(testEnv());
   assert.equal(defaults.callbackUrl, null);
-  assert.equal(defaults.callbackKey, "dev-callback-key");
+  assert.equal(defaults.callbackKey, TEST_CALLBACK_KEY);
 
-  const configured = loadConfig({
+  const configured = loadConfig(testEnv({
     SUPER_RLM_CALLBACK_URL: "  http://callback.test/hook  ",
     SUPER_RLM_CALLBACK_KEY: "secret",
-  } as NodeJS.ProcessEnv);
+  }));
   assert.equal(configured.callbackUrl, "http://callback.test/hook");
   assert.equal(configured.callbackKey, "secret");
 
-  assert.equal(loadConfig({ SUPER_RLM_CALLBACK_URL: "   " } as NodeJS.ProcessEnv).callbackUrl, null);
+  assert.equal(loadConfig(testEnv({ SUPER_RLM_CALLBACK_URL: "   " })).callbackUrl, null);
 });
 
 interface CapturedFailure {

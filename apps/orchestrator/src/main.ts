@@ -1,11 +1,12 @@
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { loadConfig } from "./config.ts";
 import { Store } from "./db.ts";
 import { acquireLock, type LockHandle } from "./lock.ts";
 import { Orchestrator } from "./orchestrator.ts";
+import { applyProfileOverrides, loadProfileOverrides, saveProfileOverride } from "./profileOverrides.ts";
 import { loadProfiles, profileSummaries, updateProfile, type ProfilesConfig } from "./profiles.ts";
 import { createOrchestratorServer, serverAddress } from "./server.ts";
 
@@ -14,11 +15,13 @@ async function main(): Promise<void> {
   let profiles: ProfilesConfig;
   try {
     profiles = loadProfiles();
+    // Fail closed: a broken or stale override set must not run Tickets with
+    // model settings the operator did not intend.
+    applyProfileOverrides(profiles, loadProfileOverrides(config.profileOverridesPath), config.profileOverridesPath);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
-  applyProfileOverrides(profiles, config.profileOverridesPath);
   mkdirSync(dirname(config.dbPath), { recursive: true });
   mkdirSync(config.workspaceRoot, { recursive: true });
 
@@ -63,10 +66,23 @@ async function main(): Promise<void> {
     callbackKey: config.callbackKey,
     profiles: profileList,
     updateProfile: (name, patch) => {
+      const existing = profiles.profiles[name];
+      if (!existing) throw new Error(`unknown profile: ${name}`);
+      const previous = {
+        provider: existing.provider,
+        model: existing.model,
+        thinking: existing.thinking,
+      };
       const updated = updateProfile(profiles, name, patch);
+      try {
+        saveProfileOverride(config.profileOverridesPath, name, updated);
+      } catch (error) {
+        // Keep memory and disk consistent when the atomic write fails.
+        Object.assign(existing, previous);
+        throw error;
+      }
       const index = profileList.findIndex((profile) => profile.name === name);
       if (index >= 0) profileList[index] = updated;
-      saveProfileOverride(config.profileOverridesPath, updated);
       return updated;
     },
   });
@@ -95,45 +111,6 @@ async function main(): Promise<void> {
 
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
-}
-
-function applyProfileOverrides(profiles: ProfilesConfig, path: string): void {
-  if (!existsSync(path)) return;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
-  } catch (error) {
-    console.error(`ignoring unreadable profile overrides ${path}: ${error instanceof Error ? error.message : String(error)}`);
-    return;
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-  for (const [name, patch] of Object.entries(parsed as Record<string, unknown>)) {
-    if (!patch || typeof patch !== "object" || Array.isArray(patch)) continue;
-    try {
-      updateProfile(profiles, name, patch as Record<string, unknown>);
-    } catch (error) {
-      console.error(`ignoring invalid override for profile ${name}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-}
-
-function saveProfileOverride(path: string, profile: ReturnType<typeof updateProfile>): void {
-  let overrides: Record<string, unknown> = {};
-  if (existsSync(path)) {
-    try {
-      const parsed = JSON.parse(readFileSync(path, "utf8"));
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) overrides = parsed as Record<string, unknown>;
-    } catch {
-      // A broken override file is replaced by the next successfully saved update.
-    }
-  }
-  overrides[profile.name] = {
-    provider: profile.provider,
-    model: profile.model,
-    thinking: profile.thinking,
-  };
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(overrides, null, 2)}\n`, "utf8");
 }
 
 await main();

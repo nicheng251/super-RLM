@@ -27,6 +27,8 @@ def make_config(tmp_path):
         "SUPER_RLM_HOME": str(tmp_path / "home"),
         "SUPER_RLM_PRIME_AGENT": str(tmp_path / "prime-agent.exe"),
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
         "SUPER_RLM_WORKER_PORT": "0",
         "SUPER_RLM_DAEMON_AUTOSTART": "0",
     })
@@ -78,14 +80,14 @@ def test_shutdown_route_requires_token_and_requests_graceful_shutdown(tmp_path, 
         requested = []
         app.state.request_shutdown = lambda: requested.append("requested")
         response = client.post(
-            "/v1/shutdown", headers={"authorization": "Bearer dev-worker-token"}
+            "/v1/shutdown", headers={"authorization": "Bearer test-worker-token"}
         )
         assert response.status_code == 200
         assert response.json() == {"status": "shutting_down"}
         assert requested == ["requested"]
 
         again = client.post(
-            "/v1/shutdown", headers={"authorization": "Bearer dev-worker-token"}
+            "/v1/shutdown", headers={"authorization": "Bearer test-worker-token"}
         )
         assert again.status_code == 200
         assert requested == ["requested"]

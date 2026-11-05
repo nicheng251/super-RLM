@@ -13,6 +13,7 @@ SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_slice" \
 SUPER_RLM_ORCHESTRATOR_URL=http://127.0.0.1:8787 \
 SUPER_RLM_WORKER_PORT=8080 \
 SUPER_RLM_WORKER_TOKEN=worker-token \
+SUPER_RLM_CALLBACK_KEY=callback-key \
 SUPER_RLM_PRIME_AGENT="$PWD/../../runtime/prime-agent/prime-agent.exe" \
 SUPER_RLM_KERNEL_VENV="$HOME/.super-rlm/projects/prj_slice/prime/kernel-venv" \
 SUPER_RLM_KERNEL_PYTHON="$HOME/.super-rlm/projects/prj_slice/prime/kernel-venv/Scripts/python.exe" \
@@ -169,7 +170,7 @@ policy writes `<name>.super-rlm-<ticket_id><suffix>` instead of overwriting.
 | --- | --- | --- |
 | `SUPER_RLM_ORCHESTRATOR_URL` | `http://127.0.0.1:8787` | Orchestrator base URL. |
 | `SUPER_RLM_WORKER_ID` | host + pid | Worker identity. |
-| `SUPER_RLM_WORKER_TOKEN` | `dev-worker-token` | Registration/heartbeat/report bearer token. |
+| `SUPER_RLM_WORKER_TOKEN` | required | Registration/heartbeat/report bearer token. |
 | `SUPER_RLM_WORKER_HOST` | `127.0.0.1` | Bind address. |
 | `SUPER_RLM_WORKER_PORT` | `8080` | Bind port. |
 | `SUPER_RLM_MAX_CONCURRENCY` | `2` | Concurrent ACP processes. |
@@ -197,8 +198,12 @@ policy writes `<name>.super-rlm-<ticket_id><suffix>` instead of overwriting.
 | `SUPER_RLM_REPORT_SKILL` | repo skill dir | `super-rlm-report` skill path. |
 | `SUPER_RLM_WORKER_PROMPT` | repo prompt | Appended Worker system prompt. |
 | `SUPER_RLM_TURN_TIMEOUT_S` | `3600` | Per-ACP-turn timeout. |
-| `SUPER_RLM_CALLBACK_KEY` | `dev-callback-key` | HMAC-SHA256 key for report callbacks. |
+| `SUPER_RLM_CALLBACK_KEY` | required | HMAC-SHA256 key for report callbacks. |
 | `SUPER_RLM_ASSIGNMENT_HEARTBEAT_INTERVAL_S` | `10` | Assignment heartbeat interval. |
+
+The API secrets have no built-in defaults. Starting the Worker directly without
+them fails with a setup error. Run `super-rlm` to generate
+`<home>/secrets/api.env`, or create that file with the two values yourself.
 
 ## Tests
 

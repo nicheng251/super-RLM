@@ -149,6 +149,10 @@ Router changes apply to the current Router session. Worker profile changes are
 saved under `<SUPER_RLM_HOME>/profiles.overrides.json` and apply to subsequent
 Tickets without restarting the Orchestrator. `config/profiles.yaml` remains the
 base configuration. Model changes are rejected while a Router turn is running.
+The override file is validated on startup; an invalid or stale entry stops the
+Orchestrator with an explicit error instead of being ignored. Use
+`super-rlm profiles reset <name>` or `super-rlm profiles reset --all` to drop
+saved overrides and return to the `config/profiles.yaml` values.
 
 View switching is `Alt+1..4` only. Task Detail is a child page of Tasks.
 

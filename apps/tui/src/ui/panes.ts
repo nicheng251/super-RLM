@@ -82,6 +82,7 @@ export interface StatusModel {
   routerModel: string;
   routerThinking: string;
   routerContextWindow: number | null;
+  routerContextUsed: number | null;
   orchestrator: boolean;
   worker: boolean;
   sse: boolean;
@@ -104,7 +105,9 @@ export class StatusBar implements Component {
   render(width: number): string[] {
     const model = this.getModel();
     const dot = (on: boolean, label: string) => `${on ? green("\u25cf") : red("\u25cb")} ${label}`;
-    const context = model.routerContextWindow ? formatTokens(model.routerContextWindow) : "?";
+    const window = model.routerContextWindow ? formatTokens(model.routerContextWindow) : "?";
+    const used = model.routerContextUsed !== null ? formatTokens(model.routerContextUsed) : "?";
+    const context = `${used}/${window}`;
     const parts = [
       bold(cyan("super-RLM")),
       gray(model.projectId),

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -55,6 +55,27 @@ test("help no longer lists background services or the standalone Router", () => 
   assert.doesNotMatch(response.stdout, /super-rlm dev\b/);
   assert.doesNotMatch(response.stdout, /--no-services/);
   assert.doesNotMatch(response.stdout, /super-rlm \[router\]/);
+});
+
+test("status works with a freshly generated secrets file", () => {
+  const home = mkdtempSync(join(tmpdir(), "super-rlm-main-status-"));
+  const env: NodeJS.ProcessEnv = { ...process.env, SUPER_RLM_HOME: home };
+  for (const key of ["SUPER_RLM_ROUTER_TOKEN", "SUPER_RLM_WORKER_TOKEN", "SUPER_RLM_CALLBACK_KEY"]) {
+    delete env[key];
+  }
+  const response = spawnSync(process.execPath, [mainEntry, "status"], { encoding: "utf8", env });
+  assert.equal(response.status, 0, response.stderr);
+  assert.ok(existsSync(join(home, "secrets", "api.env")));
+});
+
+test("gc is listed in help and rejects unknown flags before touching the stack", () => {
+  const help = run(["help"]);
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /super-rlm gc \[--apply\]/);
+
+  const response = run(["gc", "--bogus"]);
+  assert.equal(response.status, 1);
+  assert.match(response.stderr, /super-rlm gc: unknown argument: --bogus/);
 });
 
 test("the config command prints redacted token and key fields", () => {

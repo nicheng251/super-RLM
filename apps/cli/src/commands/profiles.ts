@@ -7,6 +7,7 @@
 
 import { join } from "node:path";
 
+import { resetProfileOverrides } from "../../../orchestrator/src/profileOverrides.ts";
 import { loadProfiles, profileSummaries, type ProfileConfig, type ProfilesConfig } from "../../../orchestrator/src/profiles.ts";
 import type { CliConfig } from "../config.ts";
 
@@ -15,9 +16,11 @@ export interface ProfilesOptions {
 }
 
 interface ParsedArgs {
-  command: "list" | "show" | "validate" | null;
+  command: "list" | "show" | "validate" | "reset" | null;
   name?: string;
   configPath?: string;
+  overridesPath?: string;
+  all: boolean;
   json: boolean;
 }
 
@@ -25,22 +28,30 @@ function parseArgs(args: string[]): ParsedArgs {
   let command: ParsedArgs["command"] = null;
   let name: string | undefined;
   let configPath: string | undefined;
+  let overridesPath: string | undefined;
+  let all = false;
   let json = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === "list" || arg === "show" || arg === "validate") {
+    if (arg === "list" || arg === "show" || arg === "validate" || arg === "reset") {
       command = arg;
     } else if (arg === "--json") {
       json = true;
+    } else if (arg === "--all") {
+      all = true;
     } else if (arg === "--config") {
       configPath = args[++index];
     } else if (arg.startsWith("--config=")) {
       configPath = arg.slice("--config=".length);
-    } else if (!arg.startsWith("-") && command === "show" && name === undefined) {
+    } else if (arg === "--overrides") {
+      overridesPath = args[++index];
+    } else if (arg.startsWith("--overrides=")) {
+      overridesPath = arg.slice("--overrides=".length);
+    } else if (!arg.startsWith("-") && (command === "show" || command === "reset") && name === undefined) {
       name = arg;
     }
   }
-  return { command, name, configPath, json };
+  return { command, name, configPath, overridesPath, all, json };
 }
 
 function printProfile(profile: ProfileConfig): void {
@@ -67,6 +78,7 @@ function printProfile(profile: ProfileConfig): void {
 
 function usage(): void {
   console.error("Usage: super-rlm profiles list|show <name>|validate [--json] [--config <path>]");
+  console.error("       super-rlm profiles reset <name>|--all [--overrides <path>]");
 }
 
 export function runProfiles(config: CliConfig, args: string[], options: ProfilesOptions = {}): number {
@@ -75,6 +87,36 @@ export function runProfiles(config: CliConfig, args: string[], options: Profiles
     usage();
     return 1;
   }
+  if (parsed.command === "reset") {
+    if (parsed.all && parsed.name !== undefined) {
+      console.error("[profiles] use either a profile name or --all, not both");
+      return 1;
+    }
+    if (!parsed.all && parsed.name === undefined) {
+      usage();
+      return 1;
+    }
+    const name = parsed.all ? null : parsed.name ?? null;
+    const overridesPath = parsed.overridesPath
+      ?? options.env?.SUPER_RLM_PROFILE_OVERRIDES
+      ?? join(config.home, "profiles.overrides.json");
+    try {
+      const result = resetProfileOverrides(overridesPath, name);
+      if (result.removed.length === 0 && !result.fileRemoved) {
+        console.log(name === null
+          ? `[profiles] no overrides file at ${overridesPath}`
+          : `[profiles] no override for ${name}`);
+        return 0;
+      }
+      const scope = name ?? (result.removed.length > 0 ? result.removed.join(", ") : overridesPath);
+      console.log(`[profiles] removed overrides for ${scope}; config/profiles.yaml values apply on the next Orchestrator start`);
+      return 0;
+    } catch (error) {
+      console.error(`[profiles] ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
+  }
+
   let profiles: ProfilesConfig;
   try {
     profiles = loadProfiles(parsed.configPath ?? profilesConfigPath(config, options.env));

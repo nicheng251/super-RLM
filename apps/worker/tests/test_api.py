@@ -41,6 +41,8 @@ def config(tmp_path):
         "SUPER_RLM_PRIME_AGENT": str(tmp_path / "prime-agent.exe"),
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
         "SUPER_RLM_WORKER_ID": "wrk_test",
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
     })
 
 

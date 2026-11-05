@@ -28,8 +28,12 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v6，迁移前自动备份）；55 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；83 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands、delivery、daemon lifecycle 和 security 测试）。
 - `apps/cli` 已实现：`super-rlm` 直接启动 L3 TUI，并在 Windows Job Object 中管理 Orchestrator、Worker、Prime daemon 的完整生命周期；`tui` 是别名；后台语义 `up/router/dev` 已删除；`down/status/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles` 保留；52 个 `node:test` 通过。
-- 当前单元/集成测试合计 240 个：protocol 28、orchestrator 55、worker 83、cli 52、router 2、tui 20。
-- P0-A1 已实现：`super-rlm` 直接启动 TUI；Windows Job Object (`KILL_ON_JOB_CLOSE`) 包含 Orchestrator/Worker/TUI/daemon；Worker 显式启动并停止项目 daemon；Ticket cancel 使用 `prime-agent stop <session_ref stem>` 并记录 `cleanup_error`；随机 token 写入 `<home>/secrets/api.env`；loopback 强制；callback 基础 SSRF 防护；每 Ticket TEMP/PIP/NPM/XDG 隔离；prepare 输出 secret 脱敏。
+- 当前单元/集成测试合计 268 个：protocol 28、orchestrator 67、worker 87、cli 64、router 2、tui 20。
+- P0-A1 已实现：`super-rlm` 直接启动 TUI；Windows Job Object (`KILL_ON_JOB_CLOSE`) 包含 Orchestrator/Worker/TUI/daemon；Worker 显式启动并停止项目 daemon；Ticket cancel 使用 `prime-agent stop <session_ref stem>` 并记录 `cleanup_error`；随机 token 写入 `<home>/secrets/api.env`；Orchestrator/Worker 直接启动 fail-closed；loopback 强制；callback 基础 SSRF 防护；每 Ticket TEMP/PIP/NPM/XDG 隔离；prepare 输出 secret 脱敏。
+- 已实现 `super-rlm gc`：默认 dry-run，按 terminal Ticket/Task 清理 tmp/sessions/workspaces，worktrees 需显式 `--worktrees`，运行中服务拒绝执行，脏 worktree 跳过。
+- `profiles.overrides.json` 已改为原子写、严格校验、fail-closed 启动，并支持 `super-rlm profiles reset <name>|--all`。
+- 新增 `scripts/regression/windows_lifecycle.py`：Job 优雅退出/失败/杀 supervisor/启动失败/daemon 生命周期，5 个非付费 case 通过；`--real-prime` 管理 smoke 6/6 通过。
+- L3 状态栏现在显示 `ctx:已用/窗口`（来自 Pi `getSessionStats().contextUsage`）。
 - 明确未做：模型 Proxy、Restricted Token、AppContainer、网络出口 allowlist、真正 `read_only` 文件系统强制。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。

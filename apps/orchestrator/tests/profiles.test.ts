@@ -12,6 +12,7 @@ import { Orchestrator, OrchestratorError } from "../src/orchestrator.ts";
 import type { DispatchFn } from "../src/orchestrator.ts";
 import { defaultProfilesPath, loadProfiles, profileExecution, profileSummaries, updateProfile } from "../src/profiles.ts";
 import { createOrchestratorServer, serverAddress } from "../src/server.ts";
+import { testEnv } from "./env.ts";
 import type { ExecutionRequest } from "../../../packages/protocol/ts/index.ts";
 
 function writeProfiles(yaml: string): string {
@@ -22,9 +23,9 @@ function writeProfiles(yaml: string): string {
 }
 
 test("config reads the project repository from the environment", () => {
-  assert.equal(loadConfig({}).projectRepo, null);
-  assert.equal(loadConfig({ SUPER_RLM_PROJECT_REPO: "   " }).projectRepo, null);
-  assert.equal(loadConfig({ SUPER_RLM_PROJECT_REPO: " /tmp/repo " }).projectRepo, "/tmp/repo");
+  assert.equal(loadConfig(testEnv()).projectRepo, null);
+  assert.equal(loadConfig(testEnv({ SUPER_RLM_PROJECT_REPO: "   " })).projectRepo, null);
+  assert.equal(loadConfig(testEnv({ SUPER_RLM_PROJECT_REPO: " /tmp/repo " })).projectRepo, "/tmp/repo");
 });
 
 test("loads the repository profiles and resolves execution options", () => {

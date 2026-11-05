@@ -148,6 +148,8 @@ def make_daemon(tmp_path: Path, **env):
         "SUPER_RLM_HOME": str(tmp_path / "home"),
         "SUPER_RLM_PRIME_AGENT": str(agent),
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
         "SUPER_RLM_PRIME_DAEMON": str(tmp_path / "daemon" / "worker.sock"),
         "SUPER_RLM_DAEMON_START_TIMEOUT_S": "5",
         "SUPER_RLM_DAEMON_COMMAND_TIMEOUT_S": "5",

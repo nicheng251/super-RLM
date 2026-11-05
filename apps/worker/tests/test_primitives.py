@@ -33,6 +33,8 @@ def test_build_env_uses_project_paths(tmp_path):
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
         "SUPER_RLM_KERNEL_PYTHON": str(tmp_path / "kernel" / "python.exe"),
         "SUPER_RLM_BASH_SHELL": "C:/Program Files/Git/bin/bash.exe",
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
     })
     env = build_env(
         config,
@@ -59,6 +61,8 @@ def test_build_args_adds_resume_and_report_skill(tmp_path):
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
         "SUPER_RLM_REPORT_SKILL": str(tmp_path / "skill"),
         "SUPER_RLM_WORKER_PROMPT": str(tmp_path / "worker.md"),
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
     })
     args = build_args(
         config,

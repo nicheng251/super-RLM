@@ -7,6 +7,10 @@ This harness is **not** part of the unit test suites and is not run by CI. It
 exists for deliberate end-to-end checks before a release or after a runtime
 change.
 
+For the **no-cost** Windows Job Object and Prime Agent daemon lifecycle checks,
+see [Windows Job / daemon lifecycle regression](#windows-job--daemon-lifecycle-regression-no-model-calls)
+at the end of this file.
+
 ## Cost warning
 
 These cases call the real DeepSeek API with provider `deepseek` and model
@@ -215,3 +219,79 @@ Keep cases explicit and structured:
 
 Do not add real-model cases to `apps/worker/tests` or the Orchestrator
 `node:test` suites. This harness stays manual.
+
+
+## Windows Job / daemon lifecycle regression (no model calls)
+
+`windows_lifecycle.py` is a fast, no-cost regression harness for the P0-A1
+process model. It never calls a model, never reads user Pi/Prime sessions, and
+never touches the user's normal Prime Agent daemon.
+
+It has two halves:
+
+1. **Job supervisor.** It generates plans for
+   `apps/cli/supervisor/job_supervisor.py` and runs dummy Orchestrator, Worker,
+   and TUI children. It checks the Job's `KILL_ON_JOB_CLOSE` flag, the graceful
+   shutdown endpoints, Job termination on TUI failure, child termination when
+   the supervisor is killed, and startup-failure cleanup.
+2. **Prime Agent daemon.** It runs the real Worker with a generated fake
+   `prime-agent` executable. It checks daemon startup from Worker startup,
+   canonical socket reuse, daemon survival after the Worker exits, explicit
+   zero-session shutdown, and `prime-agent stop <session>` semantics.
+
+An optional real `prime-agent` smoke is available with `--real-prime`. It only
+runs `status`, `shutdown`, and `stop` against a temporary project-local socket
+and agent directory. It does not start a session or call a model.
+
+### Requirements
+
+- Windows 10 or 11. The Job half needs Windows Job Objects.
+- The Worker virtualenv:
+  `apps/worker/.venv/Scripts/python.exe`.
+- No API key, model registry, kernel venv, or prepared project home.
+- A running `super-rlm` stack is not required and is not touched. The harness
+  uses unique temp directories, ports, Job names, and daemon sockets; it does
+  not use the project home.
+
+### Run
+
+From the repository root:
+
+```bash
+# All fake-daemon cases (about 15-20 seconds).
+apps/worker/.venv/Scripts/python.exe scripts/regression/windows_lifecycle.py
+
+# One case, with child logs and tracebacks.
+apps/worker/.venv/Scripts/python.exe scripts/regression/windows_lifecycle.py --case job_kill --verbose
+
+# Include the isolated real prime-agent admin smoke.
+apps/worker/.venv/Scripts/python.exe scripts/regression/windows_lifecycle.py --real-prime
+
+# Keep the run directory for inspection.
+apps/worker/.venv/Scripts/python.exe scripts/regression/windows_lifecycle.py --keep-temp
+```
+
+### Cases
+
+| Case | What it does | Main assertions |
+| --- | --- | --- |
+| `job_graceful` | TUI exits 0. | Supervisor exits 0; Job has `KILL_ON_JOB_CLOSE`; Orchestrator cancel and Worker shutdown endpoints were called; `prime-agent shutdown` got the expected socket; all children are gone; PID files are removed; Job is closed. |
+| `job_failure` | TUI exits 3. | Supervisor returns 3; no graceful endpoints or daemon shutdown; all children are terminated; PID files are removed. |
+| `job_kill` | Supervisor is terminated with `TerminateProcess`. | Job has `KILL_ON_JOB_CLOSE`; TUI, Orchestrator, and Worker (launcher and real PID) die; no orphans; Job is closed. |
+| `job_startup_failure` | Worker exits during startup. | Supervisor returns 1; TUI never starts; the healthy Orchestrator is killed; no daemon shutdown; PID files are removed. |
+| `daemon_lifecycle` | Worker 1 starts a fake daemon; Worker 2 reuses it through a non-canonical socket spelling; both Workers are killed; Worker 3 shuts the zero-session daemon down; `PrimeDaemon.stop_session` is exercised. | Exactly one daemon start; canonical socket in every admin call; no prompt/ACP commands; daemon survives Worker exit; explicit `shutdown` (not `stop`) for a zero-session daemon; `stop` returns true then false for a session. |
+| `real_prime_admin` | Opt-in real `prime-agent` admin smoke. | `status --json` and `shutdown --force --json` succeed on an isolated socket; `stop` for a missing session reports the isolated socket; no model command is used. |
+
+### Output and exit codes
+
+Progress, PASS/FAIL lines, and assertion details go to stderr. One JSON summary
+goes to stdout. Exit codes are `0` all selected cases passed, `1` any failure,
+`2` setup error, and `130` interrupted.
+
+All child processes are killed in a `finally` block even when a case fails. On
+success the temporary run directory is removed. On failure it is kept for
+diagnostics; pass `--keep-temp` to keep it on success too, or `--clean-temp` to
+remove it even after a failure.
+
+Findings from the first run are in
+[windows_lifecycle_findings.md](windows_lifecycle_findings.md).

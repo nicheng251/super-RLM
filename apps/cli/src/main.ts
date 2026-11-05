@@ -7,6 +7,7 @@ import { runArtifacts } from "./commands/artifacts.ts";
 import { runBackup, runRestore } from "./commands/backup.ts";
 import { runBootstrap } from "./commands/bootstrap.ts";
 import { runDoctor } from "./commands/doctor.ts";
+import { parseGcArgs, runGc } from "./commands/gc.ts";
 import { runInit } from "./commands/init.ts";
 import { syncModels } from "./commands/models.ts";
 import { runProfiles } from "./commands/profiles.ts";
@@ -52,6 +53,9 @@ Usage:
   super-rlm restore <backup-dir>
                                  Restore an offline backup
   super-rlm tasks [--json] [--limit <n>]
+  super-rlm gc [--apply] [--older-than <days>] [--tmp] [--sessions]
+               [--workspaces] [--worktrees] [--all]
+                                 Delete artifacts of finished Tickets (dry run by default)
   super-rlm doctor [--json]
   super-rlm init                 Create .super-rlm-project.json
   super-rlm bootstrap [--dry-run]  Prepare the project kernel venv and report skill
@@ -59,11 +63,19 @@ Usage:
   super-rlm profiles list        List Worker profiles from config/profiles.yaml
   super-rlm profiles show <name> Show one Worker profile
   super-rlm profiles validate    Validate config/profiles.yaml
+  super-rlm profiles reset <name>|--all
+                                 Remove saved model overrides so config/profiles.yaml applies
   super-rlm config               Print resolved configuration
 
 The TUI owns the Orchestrator, Worker, and Prime Agent daemon for its lifetime.
 Background and standalone Router commands were removed. If a stack is already
 running, use \`super-rlm down\` before starting again.
+
+\`super-rlm gc\` is a dry run unless --apply is passed. It refuses while the
+stack is running, and deletes only resources whose Ticket and Task are terminal
+in the Orchestrator database. The default scope is --tmp --sessions
+--workspaces (older than 7 days); --worktrees is opt-in and skips dirty
+worktrees. --all selects every scope.
 
 Node is a host prerequisite (>= 22.19). The project owns Pi and Prime Agent.`);
 }
@@ -193,6 +205,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   }
   if (parsed.command === "doctor") {
     return runDoctor(loadConfig(), { json: rest.includes("--json") });
+  }
+  if (parsed.command === "gc") {
+    const parsedGc = parseGcArgs(rest);
+    if ("error" in parsedGc) {
+      console.error(`super-rlm gc: ${parsedGc.error}`);
+      return 1;
+    }
+    return runGc(loadConfig(), parsedGc.options);
   }
 
   console.error(`Unknown command: ${parsed.name ?? parsed.command}`);

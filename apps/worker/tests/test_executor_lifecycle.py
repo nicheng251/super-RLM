@@ -106,6 +106,8 @@ def make_config(tmp_path, **env):
         "SUPER_RLM_HOME": str(tmp_path / "home"),
         "SUPER_RLM_PRIME_AGENT": str(tmp_path / "prime-agent.exe"),
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
         "SUPER_RLM_WORKER_PORT": "0",
         "SUPER_RLM_DAEMON_AUTOSTART": "0",
         "SUPER_RLM_CANCEL_WAIT_S": "0.3",

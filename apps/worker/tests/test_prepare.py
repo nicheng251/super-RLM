@@ -28,6 +28,8 @@ def make_config(tmp_path, prepare_command=None, prepare_timeout_s=None):
         "SUPER_RLM_PRIME_AGENT": str(tmp_path / "prime-agent.exe"),
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
         "SUPER_RLM_WORKER_ID": "wrk_test",
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
         "SUPER_RLM_PROJECT_REPO": str(tmp_path / "repo"),
     }
     if prepare_command is not None:

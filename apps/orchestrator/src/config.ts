@@ -38,6 +38,20 @@ export function validateLoopbackHost(value: string): string {
   return bare;
 }
 
+/**
+ * Read a required API secret. Direct service startup must fail closed: an
+ * absent or blank value is a deployment error, never a built-in default.
+ */
+export function requiredSecret(env: NodeJS.ProcessEnv, name: string, home: string): string {
+  const value = env[name]?.trim();
+  if (!value) {
+    throw new Error(
+      `${name} is required. Run \`super-rlm\` to generate local secrets, or add ${name} to ${join(home, "secrets", "api.env")}.`,
+    );
+  }
+  return value;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const home = env.SUPER_RLM_HOME ?? join(homedir(), ".super-rlm", "projects", "default");
   return {
@@ -46,10 +60,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     dbPath: env.SUPER_RLM_DB ?? join(home, "orchestrator", "orchestrator.sqlite"),
     workspaceRoot: env.SUPER_RLM_WORKSPACES ?? join(home, "workspaces"),
     profileOverridesPath: env.SUPER_RLM_PROFILE_OVERRIDES ?? join(home, "profiles.overrides.json"),
-    routerToken: env.SUPER_RLM_ROUTER_TOKEN ?? "dev-router-token",
-    workerToken: env.SUPER_RLM_WORKER_TOKEN ?? "dev-worker-token",
+    routerToken: requiredSecret(env, "SUPER_RLM_ROUTER_TOKEN", home),
+    workerToken: requiredSecret(env, "SUPER_RLM_WORKER_TOKEN", home),
     callbackUrl: env.SUPER_RLM_CALLBACK_URL?.trim() || null,
-    callbackKey: env.SUPER_RLM_CALLBACK_KEY ?? "dev-callback-key",
+    callbackKey: requiredSecret(env, "SUPER_RLM_CALLBACK_KEY", home),
     callbackAllowPrivate: env.SUPER_RLM_CALLBACK_ALLOW_PRIVATE === "1",
     projectRepo: env.SUPER_RLM_PROJECT_REPO?.trim() || null,
     maxConcurrentTickets: Number(env.SUPER_RLM_MAX_CONCURRENT_TICKETS ?? "4"),

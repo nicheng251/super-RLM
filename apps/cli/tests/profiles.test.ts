@@ -1,6 +1,6 @@
 
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -137,4 +137,61 @@ test("profiles uses SUPER_RLM_PROFILES_CONFIG and reports invalid files", () => 
   const invalid = capture(() => runProfiles(config(directory), ["validate", "--config", broken]));
   assert.equal(invalid.code, 1);
   assert.match(invalid.stderr.join("\n"), /default profile is required/);
+});
+
+test("profiles reset removes one override or all overrides", () => {
+  const directory = mkdtempSync(join(tmpdir(), "super-rlm-cli-overrides-"));
+  const overridesPath = join(directory, "profiles.overrides.json");
+  writeFileSync(overridesPath, JSON.stringify({
+    default: { provider: "p", model: "m", thinking: "low" },
+    git: { thinking: "high" },
+  }), "utf8");
+  const config = { repoRoot: join(directory, "no-such-repo"), home: directory } as CliConfig;
+  const env = { SUPER_RLM_PROFILE_OVERRIDES: overridesPath };
+
+  // Reset does not read config/profiles.yaml, so a stale or missing YAML does not block it.
+  const single = capture(() => runProfiles(config, ["reset", "default"], { env }));
+  assert.equal(single.code, 0);
+  assert.match(single.stdout.join("\n"), /removed overrides for default/);
+  assert.match(single.stdout.join("\n"), /config\/profiles\.yaml/);
+  assert.deepEqual(JSON.parse(readFileSync(overridesPath, "utf8")), { git: { thinking: "high" } });
+
+  const missing = capture(() => runProfiles(config, ["reset", "missing"], { env }));
+  assert.equal(missing.code, 0);
+  assert.match(missing.stdout.join("\n"), /no override for missing/);
+
+  const all = capture(() => runProfiles(config, ["reset", "--all"], { env }));
+  assert.equal(all.code, 0);
+  assert.match(all.stdout.join("\n"), /removed overrides for git/);
+  assert.equal(existsSync(overridesPath), false);
+
+  const again = capture(() => runProfiles(config, ["reset", "--all"], { env }));
+  assert.equal(again.code, 0);
+  assert.match(again.stdout.join("\n"), /no overrides file/);
+});
+
+test("profiles reset rejects ambiguous arguments and reports malformed files", () => {
+  const directory = mkdtempSync(join(tmpdir(), "super-rlm-cli-overrides-bad-"));
+  const overridesPath = join(directory, "profiles.overrides.json");
+  writeFileSync(overridesPath, "{ not json", "utf8");
+  const config = { repoRoot: directory, home: directory } as CliConfig;
+  const env = { SUPER_RLM_PROFILE_OVERRIDES: overridesPath };
+
+  const malformed = capture(() => runProfiles(config, ["reset", "default"], { env }));
+  assert.equal(malformed.code, 1);
+  assert.match(malformed.stderr.join("\n"), /malformed JSON/);
+  assert.equal(readFileSync(overridesPath, "utf8"), "{ not json");
+
+  const ambiguous = capture(() => runProfiles(config, ["reset", "default", "--all"], { env }));
+  assert.equal(ambiguous.code, 1);
+  assert.match(ambiguous.stderr.join("\n"), /use either a profile name or --all/);
+
+  const noName = capture(() => runProfiles(config, ["reset"], { env }));
+  assert.equal(noName.code, 1);
+  assert.match(noName.stderr.join("\n"), /super-rlm profiles reset <name>\|--all/);
+
+  // --all is the repair path for a malformed file.
+  const repaired = capture(() => runProfiles(config, ["reset", "--all"], { env }));
+  assert.equal(repaired.code, 0);
+  assert.equal(existsSync(overridesPath), false);
 });

@@ -125,6 +125,8 @@ async def test_worker_runs_prime_agent_and_forwards_a_report(tmp_path):
         "SUPER_RLM_WORKER_PROMPT": str(REPO / "apps" / "worker" / "prompts" / "worker.md"),
         "SUPER_RLM_WORKER_HOST": "127.0.0.1",
         "SUPER_RLM_WORKER_PORT": str(worker_port),
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
         "SUPER_RLM_MAX_CONCURRENCY": "1",
     })
     config.ensure_dirs()

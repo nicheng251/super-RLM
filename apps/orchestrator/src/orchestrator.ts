@@ -93,7 +93,7 @@ export interface OrchestratorConfig {
   profiles?: ProfilesConfig;
 }
 
-export const DEFAULT_CONFIG: Omit<OrchestratorConfig, "workspaceRoot"> = {
+export const DEFAULT_CONFIG: Omit<OrchestratorConfig, "workspaceRoot" | "callbackKey"> = {
   maxConcurrentTickets: 4,
   maxConcurrentTicketsPerTask: 2,
   priorityReserved: 1,
@@ -101,7 +101,6 @@ export const DEFAULT_CONFIG: Omit<OrchestratorConfig, "workspaceRoot"> = {
   dispatchTimeoutMs: 10_000,
   projectRepo: null,
   callbackUrl: null,
-  callbackKey: "dev-callback-key",
 };
 
 const BACKOFF_MS = [2_000, 5_000, 15_000];

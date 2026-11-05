@@ -11,6 +11,7 @@ SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_spike_local" \
 SUPER_RLM_PORT=8787 \
 SUPER_RLM_ROUTER_TOKEN=router-token \
 SUPER_RLM_WORKER_TOKEN=worker-token \
+SUPER_RLM_CALLBACK_KEY=callback-key \
 npm run dev
 ```
 
@@ -26,15 +27,20 @@ bundled by the project.
 | `SUPER_RLM_HOME` | `~/.super-rlm/projects/default` | Project runtime root. |
 | `SUPER_RLM_DB` | `<home>/orchestrator/orchestrator.sqlite` | SQLite path. |
 | `SUPER_RLM_WORKSPACES` | `<home>/workspaces` | Per-Ticket workspace root. |
-| `SUPER_RLM_ROUTER_TOKEN` | `dev-router-token` | Router bearer token. |
-| `SUPER_RLM_WORKER_TOKEN` | `dev-worker-token` | Worker/report bearer token. |
-| `SUPER_RLM_CALLBACK_KEY` | `dev-callback-key` | HMAC-SHA256 key for Worker reports and user callbacks. |
+| `SUPER_RLM_ROUTER_TOKEN` | required | Router bearer token. |
+| `SUPER_RLM_WORKER_TOKEN` | required | Worker/report bearer token. |
+| `SUPER_RLM_CALLBACK_KEY` | required | HMAC-SHA256 key for Worker reports and user callbacks. |
 | `SUPER_RLM_CALLBACK_URL` | unset | Optional HTTP endpoint for signed user callbacks. |
 | `SUPER_RLM_MAX_CONCURRENT_TICKETS` | `4` | Global running limit. |
 | `SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK` | `2` | Per-Task normal running limit. |
 | `SUPER_RLM_PRIORITY_RESERVED` | `1` | Slots reserved for answer/resume. |
 | `SUPER_RLM_WORKER_LEASE_MS` | `30000` | Heartbeat lease. |
 | `SUPER_RLM_PROFILES_CONFIG` | `<repo>/config/profiles.yaml` | Named Worker profiles. |
+| `SUPER_RLM_PROFILE_OVERRIDES` | `<home>/profiles.overrides.json` | Saved model-selection overrides. |
+
+The three API secrets have no built-in defaults. Starting the Orchestrator
+directly without them fails with a setup error. Run `super-rlm` to generate
+`<home>/secrets/api.env`, or create that file with the three values yourself.
 
 ## Profiles
 
@@ -45,6 +51,31 @@ prepare and blocked commands, workspace layout, and delivery policy as
 `ExecutionRequest.execution`. `GET /v1/profiles` exposes only the sanitized
 name, description, provider, model, thinking, capabilities, requires_repo,
 read_only, and write_files fields.
+
+### Saved model overrides
+
+The TUI saves Worker model selections to
+`<SUPER_RLM_HOME>/profiles.overrides.json` (override with
+`SUPER_RLM_PROFILE_OVERRIDES`). The file is a flat object:
+
+```json
+{
+  "git": { "provider": "deepseek", "model": "deepseek-pro", "thinking": "high" }
+}
+```
+
+The Orchestrator applies it on top of `config/profiles.yaml` at startup. Saves
+are atomic: the new document is written to a temporary file in the same
+directory, fsynced, renamed over the target, and existing overrides for other
+profiles are preserved. A failed write leaves the previous file intact.
+
+Validation is strict and fail-closed. Malformed JSON, a non-object document, an
+unknown profile name, an unknown field, an empty `provider`/`model`, or a
+`thinking` value outside the allowed levels stops startup with a clear error
+that names the file and entry. The Orchestrator never silently skips an
+override. `super-rlm profiles reset <name>` or `profiles reset --all` removes
+overrides so the `config/profiles.yaml` values apply again; `--all` also
+recovers from a malformed file. Restart the Orchestrator after a reset.
 
 ## Routes
 

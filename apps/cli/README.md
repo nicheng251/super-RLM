@@ -84,12 +84,24 @@ super-rlm profiles list
 super-rlm profiles list --json
 super-rlm profiles show git
 super-rlm profiles validate
+super-rlm profiles reset git          # drop the saved git override
+super-rlm profiles reset --all        # drop every saved override
 ```
 
 `list` and `validate` read the file directly; they do not require the
 Orchestrator. Set `SUPER_RLM_PROFILES_CONFIG` or pass `--config <path>` to use a
 different file. The default file is `config/profiles.yaml` at the repository
 root and must contain a `default` profile.
+
+The Model & Profiles page saves Worker model choices to
+`<home>/profiles.overrides.json`. The Orchestrator validates that file at
+startup and applies the overrides on top of `config/profiles.yaml`. An invalid
+or stale override (malformed JSON, unknown profile, empty provider/model,
+invalid thinking level, or unknown field) stops startup with an explicit error
+instead of being ignored. Fix the file or run `profiles reset --all`, then
+restart the Orchestrator. `profiles reset` edits only the overrides file; use
+`--overrides <path>` or `SUPER_RLM_PROFILE_OVERRIDES` when it is not under the
+project home.
 
 ## Models
 

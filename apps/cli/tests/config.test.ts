@@ -178,6 +178,11 @@ test("loadConfig generates project API secrets once and reuses them", () => {
   assert.notEqual(config.routerToken, config.workerToken);
   assert.notEqual(config.workerToken, config.callbackKey);
   assert.ok(!["dev-router-token", "dev-worker-token", "dev-callback-key"].includes(config.routerToken));
+  assert.equal(orchestratorEnv(config).SUPER_RLM_ROUTER_TOKEN, config.routerToken);
+  assert.equal(orchestratorEnv(config).SUPER_RLM_WORKER_TOKEN, config.workerToken);
+  assert.equal(orchestratorEnv(config).SUPER_RLM_CALLBACK_KEY, config.callbackKey);
+  assert.equal(workerEnv(config).SUPER_RLM_WORKER_TOKEN, config.workerToken);
+  assert.equal(workerEnv(config).SUPER_RLM_CALLBACK_KEY, config.callbackKey);
   if (process.platform !== "win32") {
     assert.equal(statSync(file).mode & 0o077, 0);
   }

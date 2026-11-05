@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +16,8 @@ def base_env(tmp_path):
         "SUPER_RLM_PRIME_AGENT": str(tmp_path / "prime-agent.exe"),
         "SUPER_RLM_KERNEL_VENV": str(tmp_path / "kernel"),
         "SUPER_RLM_WORKER_ID": "wrk_test",
+        "SUPER_RLM_WORKER_TOKEN": "test-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "test-callback-key",
     }
 
 
@@ -63,6 +66,36 @@ def test_build_prepare_env_scopes_temp_and_caches_per_ticket(tmp_path):
     for key in TICKET_TEMP_KEYS:
         assert env[key] == str(ticket_tmp)
     assert env.get("HOME") == os.environ.get("HOME")
+
+
+@pytest.mark.parametrize("key", ["SUPER_RLM_WORKER_TOKEN", "SUPER_RLM_CALLBACK_KEY"])
+def test_worker_requires_api_secrets(tmp_path, key):
+    env = base_env(tmp_path)
+    env.pop(key)
+    with pytest.raises(ValueError, match=key) as missing:
+        WorkerConfig.from_env(env)
+    assert "super-rlm" in str(missing.value)
+    assert str(Path(env["SUPER_RLM_HOME"]) / "secrets" / "api.env") in str(missing.value)
+
+    with pytest.raises(ValueError, match=key):
+        WorkerConfig.from_env({**base_env(tmp_path), key: "   "})
+
+
+def test_worker_uses_explicit_api_secrets(tmp_path):
+    config = WorkerConfig.from_env({
+        **base_env(tmp_path),
+        "SUPER_RLM_WORKER_TOKEN": "explicit-worker-token",
+        "SUPER_RLM_CALLBACK_KEY": "explicit-callback-key",
+    })
+    assert config.worker_token == "explicit-worker-token"
+    assert config.callback_key == "explicit-callback-key"
+
+
+def test_worker_from_empty_env_does_not_inherit_ambient_tokens(monkeypatch):
+    monkeypatch.setenv("SUPER_RLM_WORKER_TOKEN", "ambient-worker-token")
+    monkeypatch.setenv("SUPER_RLM_CALLBACK_KEY", "ambient-callback-key")
+    with pytest.raises(ValueError, match="SUPER_RLM_WORKER_TOKEN"):
+        WorkerConfig.from_env({})
 
 
 def test_redact_secrets_replaces_known_values_and_authorization_headers():

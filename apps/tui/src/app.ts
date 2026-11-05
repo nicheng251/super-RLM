@@ -104,6 +104,7 @@ export class TuiApp {
   private routerModel: string;
   private routerThinking: string;
   private routerContextWindow: number | null;
+  private routerContextUsed: number | null = null;
 
   constructor(config: CliConfig) {
     this.config = config;
@@ -370,6 +371,7 @@ export class TuiApp {
             await this.rpc!.setModel(choice.provider, choice.model);
             await this.rpc!.setThinkingLevel(choice.thinking);
             await this.syncRouterModelState();
+            this.routerContextUsed = null;
             selector.updateProfile("router", {
               provider: this.routerProvider,
               model: this.routerModel,
@@ -536,6 +538,7 @@ export class TuiApp {
       routerModel: this.routerModelName,
       routerThinking: this.routerThinking,
       routerContextWindow: this.routerContextWindow,
+      routerContextUsed: this.routerContextUsed,
       orchestrator: this.state.health.orchestrator,
       worker: this.state.health.worker,
       sse: this.state.health.sse,
@@ -552,6 +555,15 @@ export class TuiApp {
     ]);
     this.state.health.orchestrator = orchestrator;
     this.state.health.worker = worker;
+    if (this.rpc) {
+      try {
+        const stats = await this.rpc.getSessionStats();
+        this.routerContextUsed = stats.contextUsage?.tokens ?? null;
+        if (stats.contextUsage?.contextWindow) this.routerContextWindow = stats.contextUsage.contextWindow;
+      } catch {
+        // Context usage is advisory; keep the last value.
+      }
+    }
     this.tui.requestRender();
   }
 
