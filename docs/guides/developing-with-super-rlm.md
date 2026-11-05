@@ -62,6 +62,7 @@ Models are selected from `config/models.yaml`:
 default:
   provider: deepseek
   model: deepseek-flash
+  thinking: medium       # Router reasoning level
 ```
 
 `SUPER_RLM_PRIME_PROVIDER` and `SUPER_RLM_PRIME_MODEL` still override the file.
@@ -96,15 +97,37 @@ profile.provider / profile.model / profile.thinking
 The Router chooses a profile by name, not a raw model. The Orchestrator
 validates the profile and sends `ExecutionOptions` to the Worker.
 
-The L3 status bar shows the Router model as:
+Task Detail shows the selected Worker configuration:
 
 ```text
-router:DeepSeek V4.1 Flash
+profile: git
+model: deepseek/deepseek-flash
+thinking: medium
+context: 1M
+```
+
+The context window is resolved from the matching model entry in
+`config/models.yaml`.
+
+The L3 status bar shows the Router model, reasoning level, and context window:
+
+```text
+router:DeepSeek V4.1 Flash  thinking:medium  ctx:1M
 ```
 
 `DeepSeek V4.1 Flash` is the `name` of the model entry in
 `config/models.yaml`. If no display name exists, it falls back to
-`provider/model`.
+`provider/model`. The context window comes from the same model entry:
+
+```yaml
+models:
+  - id: deepseek-flash
+    name: DeepSeek V4.1 Flash
+    contextWindow: 1048576
+```
+
+`thinking` comes from `default.thinking`; `SUPER_RLM_PRIME_THINKING`
+overrides it. The Router passes it to Pi as `--thinking`.
 
 To add a Worker model:
 

@@ -9,6 +9,7 @@ import {
   buildRouterArgs,
   ensureDirs,
   loadConfig,
+  lookupModelInfo,
   orchestratorEnv,
   readModelDefault,
   readProjectId,
@@ -34,6 +35,7 @@ test("buildRouterArgs pins the project session and control-plane guard flags", (
   assert.ok(args.includes("--append-system-prompt"));
   assert.ok(args[args.indexOf("--append-system-prompt") + 1].endsWith("router.md"));
   assert.equal(args[args.indexOf("--session-id") + 1], "super-rlm-router-default");
+  assert.equal(args[args.indexOf("--thinking") + 1], "medium");
   assert.equal(args.at(-1), "hello");
 });
 
@@ -58,11 +60,13 @@ function writeModelsYaml(content: string): string {
 const modelsWithDefault = `default:
   provider: local
   model: local-model
+  thinking: high
 providers:
   local:
     models:
       - id: local-model
         name: Local Model
+        contextWindow: 131072
 `;
 
 test("loadConfig reads the default provider/model from models.yaml", () => {
@@ -70,8 +74,24 @@ test("loadConfig reads the default provider/model from models.yaml", () => {
   const config = loadConfig({ env: { SUPER_RLM_HOME: "/tmp/super-rlm-home" }, cwd: tmpdir(), modelsConfigPath });
   assert.equal(config.primeProvider, "local");
   assert.equal(config.primeModel, "local-model");
-  assert.deepEqual(readModelDefault(modelsConfigPath), { provider: "local", model: "local-model", name: "Local Model" });
+  assert.deepEqual(readModelDefault(modelsConfigPath), {
+    provider: "local",
+    model: "local-model",
+    name: "Local Model",
+    thinking: "high",
+    contextWindow: 131072,
+  });
   assert.equal(config.primeModelName, "Local Model");
+  assert.equal(config.primeThinking, "high");
+  assert.equal(config.primeContextWindow, 131072);
+  assert.equal(config.modelsConfigPath, modelsConfigPath);
+  assert.deepEqual(lookupModelInfo(modelsConfigPath, "local", "local-model"), {
+    provider: "local",
+    model: "local-model",
+    name: "Local Model",
+    contextWindow: 131072,
+  });
+  assert.equal(lookupModelInfo(modelsConfigPath, "local", "missing"), null);
 });
 
 test("environment provider/model override the models.yaml default", () => {

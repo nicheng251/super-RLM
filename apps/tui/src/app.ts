@@ -11,9 +11,9 @@ import {
 } from "@earendil-works/pi-tui";
 import { RpcClient, type JsonAgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
-import { buildRouterArgs, routerEnv, type CliConfig } from "../../cli/src/config.ts";
+import { buildRouterArgs, lookupModelInfo, routerEnv, type CliConfig } from "../../cli/src/config.ts";
 import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model.ts";
-import type { TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
+import type { ProfileSummary, TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
 import { COMMAND_HELP, COMMANDS, parseSlashCommand } from "./commands.ts";
@@ -38,6 +38,7 @@ import {
   LinesPane,
   SidebarPane,
   StatusBar,
+  formatTokens,
   type ChatLine,
   type SidebarModel,
   type StatusModel,
@@ -89,6 +90,7 @@ export class TuiApp {
   private piStderr = "";
   private healthTimer: ReturnType<typeof setInterval> | null = null;
   private taskTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly profiles = new Map<string, ProfileSummary>();
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshing = false;
   private shuttingDown = false;
@@ -142,6 +144,7 @@ export class TuiApp {
     void this.pollHealth();
     void this.loadTasks();
     void this.loadWorkers();
+    void this.loadProfiles();
     this.startEventStream();
     void this.startPi();
 
@@ -372,6 +375,8 @@ export class TuiApp {
     return {
       projectId: this.config.projectId,
       routerModel,
+      routerThinking: this.config.primeThinking ?? "default",
+      routerContextWindow: this.config.primeContextWindow,
       orchestrator: this.state.health.orchestrator,
       worker: this.state.health.worker,
       sse: this.state.health.sse,
@@ -389,6 +394,14 @@ export class TuiApp {
     this.state.health.orchestrator = orchestrator;
     this.state.health.worker = worker;
     this.tui.requestRender();
+  }
+
+  private async loadProfiles(): Promise<void> {
+    try {
+      for (const profile of await this.api.listProfiles()) this.profiles.set(profile.name, profile);
+    } catch {
+      // Profiles are display metadata; Tasks and actions still work without them.
+    }
   }
 
   private async loadTasks(): Promise<void> {
@@ -776,6 +789,17 @@ export class TuiApp {
       lines.push("", bold("Selected ticket"));
       lines.push(`id: ${ticket.ticket_id}`);
       lines.push(`profile: ${ticket.profile}`);
+      const profile = this.profiles.get(ticket.profile);
+      if (profile) {
+        const info = lookupModelInfo(this.config.modelsConfigPath, profile.provider, profile.model);
+        lines.push(`model: ${profile.provider}/${profile.model}`);
+        lines.push(`thinking: ${profile.thinking}`);
+        lines.push(`context: ${info?.contextWindow ? formatTokens(info.contextWindow) : "-"}`);
+      } else {
+        lines.push("model: -");
+        lines.push("thinking: -");
+        lines.push("context: -");
+      }
       lines.push(`status: ${ticket.status}`);
       lines.push(`summary: ${ticket.summary ?? "-"}`);
       lines.push(`question: ${ticket.question ? `${ticket.question.kind}: ${ticket.question.text}` : "-"}`);

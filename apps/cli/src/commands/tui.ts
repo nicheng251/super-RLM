@@ -21,6 +21,9 @@ export function tuiEnv(
   env.SUPER_RLM_WORKSPACES = config.workspaceRoot;
   env.SUPER_RLM_PRIME_PROVIDER = config.primeProvider;
   env.SUPER_RLM_PRIME_MODEL = config.primeModel;
+  env.SUPER_RLM_PRIME_MODEL_NAME = config.primeModelName ?? "";
+  env.SUPER_RLM_PRIME_THINKING = config.primeThinking ?? "";
+  env.SUPER_RLM_PRIME_CONTEXT_WINDOW = config.primeContextWindow ? String(config.primeContextWindow) : "";
   if (profilesConfig) env.SUPER_RLM_PROFILES_CONFIG = profilesConfig;
   return env;
 }

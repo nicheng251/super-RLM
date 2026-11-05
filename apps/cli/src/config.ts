@@ -30,6 +30,9 @@ export interface CliConfig {
   primeProvider: string;
   primeModel: string;
   primeModelName: string | null;
+  primeThinking: string | null;
+  primeContextWindow: number | null;
+  modelsConfigPath: string;
   bashShell: string | null;
   maxConcurrency: number;
 }
@@ -43,6 +46,10 @@ export interface ModelDefault {
   model: string;
   /** Human-readable model name from config/models.yaml, when present. */
   name?: string;
+  /** Router thinking level from the CLI-only default section. */
+  thinking?: string;
+  /** Context window of the default model, when the registry declares it. */
+  contextWindow?: number;
 }
 
 /** Reads the CLI-only `default` section from a models config. A missing, unreadable, or malformed file yields null. */
@@ -61,6 +68,8 @@ export function readModelDefault(path: string): ModelDefault | null {
   const model = (section as { model?: unknown }).model;
   if (typeof provider !== "string" || !provider || typeof model !== "string" || !model) return null;
   const result: ModelDefault = { provider, model };
+  const thinking = (section as { thinking?: unknown }).thinking;
+  if (typeof thinking === "string" && thinking.trim()) result.thinking = thinking;
   const providers = (parsed as { providers?: unknown }).providers;
   if (providers && typeof providers === "object") {
     const providerEntry = (providers as Record<string, unknown>)[provider];
@@ -71,10 +80,50 @@ export function readModelDefault(path: string): ModelDefault | null {
         if (match && typeof (match as { name?: unknown }).name === "string") {
           result.name = (match as { name: string }).name;
         }
+        const contextWindow = match && typeof match === "object"
+          ? (match as { contextWindow?: unknown }).contextWindow
+          : undefined;
+        if (typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0) {
+          result.contextWindow = contextWindow;
+        }
       }
     }
   }
   return result;
+}
+
+export interface ModelInfo {
+  provider: string;
+  model: string;
+  name?: string;
+  contextWindow?: number;
+}
+
+/** Looks up display metadata for a provider/model in a models config. */
+export function lookupModelInfo(path: string, provider: string, model: string): ModelInfo | null {
+  if (!existsSync(path)) return null;
+  let parsed: unknown;
+  try {
+    parsed = parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const providers = (parsed as { providers?: unknown }).providers;
+  if (!providers || typeof providers !== "object") return null;
+  const providerEntry = (providers as Record<string, unknown>)[provider];
+  if (!providerEntry || typeof providerEntry !== "object") return null;
+  const models = (providerEntry as { models?: unknown }).models;
+  if (!Array.isArray(models)) return null;
+  const match = models.find((entry) => entry && typeof entry === "object" && (entry as { id?: unknown }).id === model);
+  if (!match || typeof match !== "object") return null;
+  const info: ModelInfo = { provider, model };
+  if (typeof (match as { name?: unknown }).name === "string") info.name = (match as { name: string }).name;
+  const contextWindow = (match as { contextWindow?: unknown }).contextWindow;
+  if (typeof contextWindow === "number" && Number.isFinite(contextWindow) && contextWindow > 0) {
+    info.contextWindow = contextWindow;
+  }
+  return info;
 }
 
 export function readProjectId(cwd = process.cwd(), env = process.env): string {
@@ -115,6 +164,14 @@ export function loadConfig(options: {
     ?? (process.platform === "win32" && existsSync("C:/Program Files/Git/bin/bash.exe")
       ? "C:/Program Files/Git/bin/bash.exe"
       : null);
+  const modelChanged = Boolean(env.SUPER_RLM_PRIME_PROVIDER || env.SUPER_RLM_PRIME_MODEL);
+  const primeProvider = env.SUPER_RLM_PRIME_PROVIDER ?? modelDefault?.provider ?? "fake";
+  const primeModel = env.SUPER_RLM_PRIME_MODEL ?? modelDefault?.model ?? "fake-1";
+  const contextRaw = env.SUPER_RLM_PRIME_CONTEXT_WINDOW;
+  const contextOverride = contextRaw ? Number(contextRaw) : null;
+  const primeContextWindow = contextOverride && Number.isFinite(contextOverride) && contextOverride > 0
+    ? contextOverride
+    : modelChanged ? null : modelDefault?.contextWindow ?? null;
   return {
     repoRoot,
     projectId,
@@ -137,9 +194,12 @@ export function loadConfig(options: {
     kernelPython,
     reportSkill: join(repoRoot, "apps", "worker", "skills", "super-rlm-report"),
     workerPrompt: join(repoRoot, "apps", "worker", "prompts", "worker.md"),
-    primeProvider: env.SUPER_RLM_PRIME_PROVIDER ?? modelDefault?.provider ?? "fake",
-    primeModel: env.SUPER_RLM_PRIME_MODEL ?? modelDefault?.model ?? "fake-1",
-    primeModelName: env.SUPER_RLM_PRIME_PROVIDER || env.SUPER_RLM_PRIME_MODEL ? null : modelDefault?.name ?? null,
+    primeProvider,
+    primeModel,
+    primeModelName: env.SUPER_RLM_PRIME_MODEL_NAME || (modelChanged ? null : modelDefault?.name ?? null),
+    primeThinking: env.SUPER_RLM_PRIME_THINKING || modelDefault?.thinking || null,
+    primeContextWindow,
+    modelsConfigPath,
     bashShell,
     maxConcurrency: Number(env.SUPER_RLM_MAX_CONCURRENCY ?? "2"),
   };
@@ -186,6 +246,7 @@ export function buildRouterArgs(config: CliConfig, options: RouterOptions = {}):
   if (config.primeProvider && config.primeModel) {
     args.push("--provider", config.primeProvider, "--model", config.primeModel);
   }
+  if (config.primeThinking) args.push("--thinking", config.primeThinking);
   if (existsSync(config.routerPrompt)) args.push("--append-system-prompt", config.routerPrompt);
   args.push(...(options.extraArgs ?? []));
   return args;

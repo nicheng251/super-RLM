@@ -80,10 +80,18 @@ export class SidebarPane implements Component {
 export interface StatusModel {
   projectId: string;
   routerModel: string;
+  routerThinking: string;
+  routerContextWindow: number | null;
   orchestrator: boolean;
   worker: boolean;
   sse: boolean;
   pi: string;
+}
+
+export function formatTokens(value: number): string {
+  if (value >= 1_000_000) return `${Math.round(value / 100_000) / 10}M`;
+  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+  return String(value);
 }
 
 export class StatusBar implements Component {
@@ -96,10 +104,13 @@ export class StatusBar implements Component {
   render(width: number): string[] {
     const model = this.getModel();
     const dot = (on: boolean, label: string) => `${on ? green("\u25cf") : red("\u25cb")} ${label}`;
+    const context = model.routerContextWindow ? formatTokens(model.routerContextWindow) : "?";
     const parts = [
       bold(cyan("super-RLM")),
       gray(model.projectId),
       gray(`router:${model.routerModel}`),
+      gray(`thinking:${model.routerThinking}`),
+      gray(`ctx:${context}`),
       dot(model.orchestrator, "orch"),
       dot(model.worker, "worker"),
       dot(model.sse, "sse"),

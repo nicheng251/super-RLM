@@ -9,6 +9,7 @@
 default:
   provider: deepseek
   model: deepseek-flash
+  thinking: medium
 
 providers:
   deepseek:

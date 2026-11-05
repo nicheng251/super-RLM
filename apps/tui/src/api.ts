@@ -1,4 +1,4 @@
-import type { TaskListItem, TaskView, TicketActionResult, WorkerView } from "../../../packages/protocol/ts/index.ts";
+import type { ProfileSummary, TaskListItem, TaskView, TicketActionResult, WorkerView } from "../../../packages/protocol/ts/index.ts";
 import { OrchestratorClient } from "../../router/src/client.ts";
 
 export interface TuiApiOptions {
@@ -43,6 +43,19 @@ export class TuiApi {
 
   cancelTicket(ticketId: string, reason?: string): Promise<TicketActionResult> {
     return this.client.cancelTicket(ticketId, reason);
+  }
+
+  async listProfiles(): Promise<ProfileSummary[]> {
+    const response = await fetch(`${this.baseUrl}/v1/profiles`, {
+      headers: { authorization: `Bearer ${this.token}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`profiles ${response.status}: ${text}`);
+    let parsed: unknown = null;
+    try { parsed = JSON.parse(text); } catch { /* keep null */ }
+    const raw = Array.isArray(parsed) ? parsed : (parsed as { profiles?: unknown } | null)?.profiles;
+    return Array.isArray(raw) ? raw as ProfileSummary[] : [];
   }
 
   async listWorkers(): Promise<WorkerView[]> {
