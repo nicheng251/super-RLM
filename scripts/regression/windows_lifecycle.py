@@ -482,7 +482,12 @@ def record(args):
 def alive(pid):
     if not pid:
         return False
-    kernel32 = ctypes.WinDLL("kernel32")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+    kernel32.GetExitCodeProcess.restype = ctypes.c_int
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
     handle = kernel32.OpenProcess(0x1000, False, int(pid))
     if not handle:
         return False
@@ -1134,13 +1139,11 @@ def case_job_kill(base: Path, verbose: bool) -> list[dict[str, Any]]:
         closed = wait_until(lambda: job_limit_flags(job_name) is None, 10)
         assertions.append(assertion("job_closed", closed, _job_flags_detail(job_limit_flags(job_name))))
         # A hard-killed supervisor cannot remove its own PID files. The CLI
-        # tolerates them through its liveness check; record the observation.
+        # tolerates them through its liveness check; this is an observation,
+        # not a lifecycle guarantee.
         stale = [str(path) for path in ctx.run.glob("*.pid") if path.exists()]
-        assertions.append(assertion(
-            "hard_kill_stale_pid_files",
-            True,
-            f"remaining after hard kill (expected, liveness-gated): {stale}",
-        ))
+        if stale:
+            log(f"[info] hard-killed supervisor left PID files (liveness-gated): {stale}")
         if verbose:
             log(run.tail(80))
         return assertions
@@ -1646,11 +1649,7 @@ def case_real_prime_admin(base: Path, verbose: bool) -> list[dict[str, Any]]:
             stop_missing.returncode != 0 and ("daemon" in detail or socket_value.lower() in detail),
             f"exit={stop_missing.returncode} detail={detail[-400:]!r}",
         ))
-        assertions.append(assertion(
-            "real_admin_no_model_calls",
-            True,
-            "only status/shutdown/stop were invoked; no ACP or prompt command",
-        ))
+        log("[info] real prime-agent admin smoke used only status/shutdown/stop (no ACP, no model)")
         if verbose:
             log(f"real prime-agent home: {home}")
         return assertions
@@ -1743,11 +1742,10 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also run the opt-in real prime-agent admin smoke (isolated socket, no model)",
     )
-    parser.add_argument("--keep-temp", action="store_true", help="keep the temporary run directory")
     parser.add_argument(
-        "--clean-temp",
+        "--keep-temp",
         action="store_true",
-        help="remove the temporary run directory even when a case fails",
+        help="keep the temporary run directory even when a case fails",
     )
     parser.add_argument(
         "--temp-root",
@@ -1803,7 +1801,7 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(summary, indent=2))
     log(f"[{'PASS' if ok else 'FAIL'}] {sum(1 for r in results if r['ok'])}/{len(results)} cases passed")
 
-    remove = args.clean_temp or (ok and not args.keep_temp)
+    remove = not args.keep_temp
     if remove:
         try:
             shutil.rmtree(base, ignore_errors=True)

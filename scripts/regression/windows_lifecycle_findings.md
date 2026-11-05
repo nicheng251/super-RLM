@@ -56,9 +56,11 @@ Impact:
 - Tooling that expects the PID file to identify the Worker image or process
   tree sees the launcher instead.
 
-Suggested follow-up if accurate PIDs matter for diagnostics: have the Worker
-write its own `worker.pid` after startup, or resolve the real child PID before
-writing the file. This was reported, not patched.
+Follow-up: the Worker now writes its own `worker.pid` from the serving
+interpreter during lifespan startup and removes it on graceful shutdown. The
+supervisor's launcher-PID file is overwritten by the real Worker PID. The
+hard-kill path still leaves stale PID files, which `status`/`down` gate on
+liveness.
 
 ## Finding 2: A hard-killed supervisor leaves stale PID files
 

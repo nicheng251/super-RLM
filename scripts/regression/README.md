@@ -288,10 +288,9 @@ Progress, PASS/FAIL lines, and assertion details go to stderr. One JSON summary
 goes to stdout. Exit codes are `0` all selected cases passed, `1` any failure,
 `2` setup error, and `130` interrupted.
 
-All child processes are killed in a `finally` block even when a case fails. On
-success the temporary run directory is removed. On failure it is kept for
-diagnostics; pass `--keep-temp` to keep it on success too, or `--clean-temp` to
-remove it even after a failure.
+All child processes are killed in a `finally` block even when a case fails. The
+temporary run directory is removed in every case; pass `--keep-temp` to keep it
+for diagnostics.
 
 Findings from the first run are in
 [windows_lifecycle_findings.md](windows_lifecycle_findings.md).

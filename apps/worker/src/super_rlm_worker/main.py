@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import uvicorn
 
@@ -58,6 +60,7 @@ def build_app(config: WorkerConfig, daemon: PrimeDaemon | None = None):
         # The shared daemon must exist before this Worker registers or accepts work.
         await daemon.ensure()
         await register_with_retry(config)
+        write_worker_pid(config)
         heartbeat = asyncio.create_task(heartbeat_loop(config, manager), name="worker-heartbeat")
         assignment_heartbeat = asyncio.create_task(
             assignment_heartbeat_loop(config, manager), name="assignment-heartbeat"
@@ -73,12 +76,34 @@ def build_app(config: WorkerConfig, daemon: PrimeDaemon | None = None):
                 except asyncio.CancelledError:
                     pass
             await runtime.shutdown()
+            remove_worker_pid(config)
 
     app = create_app(manager, config, lifespan=lifespan)
     app.state.daemon = daemon
     app.state.manager = manager
     app.state.runtime = runtime
     return app
+
+
+def _worker_pid_path(config: WorkerConfig) -> Path:
+    return config.home / "worker" / "worker.pid"
+
+
+def write_worker_pid(config: WorkerConfig) -> Path:
+    """Record the serving interpreter PID, not the venv launcher PID."""
+    path = _worker_pid_path(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(os.getpid()), encoding="utf-8")
+    return path
+
+
+def remove_worker_pid(config: WorkerConfig) -> None:
+    path = _worker_pid_path(config)
+    try:
+        if path.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            path.unlink()
+    except (FileNotFoundError, OSError):
+        pass
 
 
 def main() -> None:
