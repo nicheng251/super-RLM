@@ -17,6 +17,7 @@ super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
 super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
 super-rlm models sync     # write project Pi/Prime models.json from config/models.yaml
+super-rlm profiles list|show <name>|validate  # inspect config/profiles.yaml
 super-rlm artifacts <ticket_id> [--to <dir>] [--all]  # copy Ticket artifacts
 super-rlm backup <dir>    # offline backup of SUPER_RLM_HOME
 super-rlm restore <dir>   # restore an offline backup
@@ -61,6 +62,25 @@ SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm
 - `apps/worker/skills/super-rlm-report` editable
 
 Use `super-rlm bootstrap --dry-run` to print the commands without running them.
+## Profiles
+
+`config/profiles.yaml` defines named Worker capability profiles. A Ticket
+selects one by name; the Orchestrator validates the name and sends the resolved
+execution options (provider/model/thinking, timeout, prepare and blocked
+commands, workspace layout, delivery policy) with the Assignment.
+
+```bash
+super-rlm profiles list
+super-rlm profiles list --json
+super-rlm profiles show git
+super-rlm profiles validate
+```
+
+`list` and `validate` read the file directly; they do not require the
+Orchestrator. Set `SUPER_RLM_PROFILES_CONFIG` or pass `--config <path>` to use a
+different file. The default file is `config/profiles.yaml` at the repository
+root and must contain a `default` profile.
+
 ## Models
 
 `config/models.yaml` is the project model registry. `super-rlm models sync`
@@ -94,8 +114,9 @@ command copies each artifact returned by `ticket_result` to
 
 The workspace root is `SUPER_RLM_WORKSPACES` when set, otherwise
 `<home>/workspaces`. Artifact paths must stay inside the workspace; parents and
-absolute paths are rejected. The command prints the git branch and commit when
-the workspace is a checkout.
+absolute paths are rejected. The command prints the Ticket's reported
+`workspace_metadata` when present; git branch and commit are no longer read from
+the workspace.
 
 ## Backup and restore
 
@@ -121,7 +142,7 @@ excludes transient files: `*.pid`, `*.lock`, `*.writer-lock`, `*.sock`,
 size and SHA-256.
 
 `restore` validates the manifest and all checksums before changing the current
-runtime. It refuses a schema newer than the running build (v3), stages the
+runtime. It refuses a schema newer than the running build (v4), stages the
 backup in a temporary directory, renames the current home to
 `<home>.pre-restore-<timestamp>`, then moves the staged copy into place. If the
 backup excluded secrets, the current `<home>/secrets` is copied into the

@@ -145,6 +145,8 @@ export interface TicketSummary {
   workspace?: string | null;
   branch?: string | null;
   commit?: string | null;
+  workspace_metadata?: Record<string, unknown> | null;
+  metadata_error?: string | null;
   delivered_to: string[];
   delivery_error: string | null;
 }
@@ -163,6 +165,8 @@ export interface TicketResult {
   workspace?: string | null;
   branch?: string | null;
   commit?: string | null;
+  workspace_metadata?: Record<string, unknown> | null;
+  metadata_error?: string | null;
   delivered_to: string[];
   delivery_error: string | null;
 }
@@ -274,12 +278,50 @@ export interface ResumeSpec {
   message?: string | null;
 }
 
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type DeliveryMode = "artifacts" | "workspace" | "none";
+export type DeliveryCollision = "version" | "overwrite" | "error";
+
+export interface WorkspaceOptions {
+  agent_cwd: string;
+  artifact_root: string;
+  metadata_command?: string | null;
+}
+
+export interface DeliveryOptions {
+  mode: DeliveryMode;
+  collision: DeliveryCollision;
+  strip_prefix?: string;
+  workspace_subdir?: string | null;
+}
+
+export interface ExecutionOptions {
+  provider: string;
+  model: string;
+  thinking: ThinkingLevel;
+  timeout_s: number;
+  prepare_command?: string | null;
+  blocked_commands?: string[];
+  workspace: WorkspaceOptions;
+  delivery: DeliveryOptions;
+}
+
+export interface ProfileSummary {
+  name: string;
+  description: string;
+  provider: string;
+  model: string;
+  thinking: ThinkingLevel;
+}
+
 export interface ExecutionRequest {
   ticket_id: string;
   assignment_id: string;
   prompt: string;
   profile: string;
   workspace: string;
+  execution?: ExecutionOptions | null;
   origin_cwd?: string | null;
   deadline?: string | null;
   resume?: ResumeSpec | null;
@@ -324,6 +366,8 @@ export interface WorkerReport {
   resumed?: boolean | null;
   recovery?: boolean | null;
   question?: Question | null;
+  workspace_metadata?: Record<string, unknown> | null;
+  metadata_error?: string | null;
   delivered_to?: string[];
   delivery_error?: string | null;
   timestamp: string;

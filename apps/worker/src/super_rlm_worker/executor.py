@@ -15,8 +15,16 @@ from typing import Any
 from super_rlm_protocol import ExecutionRequest, ReportAck, ReportState, SkillReport
 
 from . import acp_client
+from .blocked import install_blocked_shims
 from .config import WorkerConfig
 from .delivery import deliver_artifacts
+from .execution_profile import (
+    ExecutionConfigError,
+    ExecutionPlan,
+    normalize_artifacts,
+    resolve_agent_cwd,
+)
+from .metadata import collect_workspace_metadata
 from .prepare import PrepareError, prepare_workspace
 from .prime_agent import discover_session_ref, session_dir_for
 from .reports import ReportForwarder, TERMINAL_STATES, build_worker_report
@@ -42,6 +50,10 @@ class InvalidReportToken(PermissionError):
     pass
 
 
+class InvalidExecution(ValueError):
+    """The submitted execution options are malformed."""
+
+
 @dataclass
 class ExecutionState:
     execution_id: str
@@ -54,9 +66,13 @@ class ExecutionState:
     report_token: str
     report_url: str
     report_config: Path
+    plan: ExecutionPlan | None = None
     origin_cwd: str | None = None
     delivered_to: list[str] = field(default_factory=list)
     delivery_error: str | None = None
+    workspace_metadata: dict[str, Any] | None = None
+    metadata_error: str | None = None
+    metadata_done: bool = False
     resume_ref: str | None = None
     resume_message: str | None = None
     seq: int = 0
@@ -123,6 +139,11 @@ class ExecutionManager:
         if self._running >= self.config.max_concurrency:
             raise AtCapacity(f"worker is at capacity ({self._running}/{self.config.max_concurrency})")
 
+        try:
+            plan = ExecutionPlan.resolve(request, self.config)
+        except ExecutionConfigError as exc:
+            raise InvalidExecution(str(exc)) from exc
+
         self.config.ensure_dirs()
         workspace = self.config.workspace_root / request.ticket_id
         workspace.mkdir(parents=True, exist_ok=True)
@@ -154,6 +175,7 @@ class ExecutionManager:
             report_token=report_token,
             report_url=report_url,
             report_config=report_config,
+            plan=plan,
             origin_cwd=getattr(request, "origin_cwd", None),
             resume_ref=request.resume.session_ref if request.resume else None,
             resume_message=request.resume.message if request.resume else None,
@@ -165,6 +187,7 @@ class ExecutionManager:
 
     async def _run(self, state: ExecutionState) -> None:
         self._running += 1
+        plan = state.plan or ExecutionPlan.from_config(self.config, profile=state.profile)
         try:
             try:
                 await prepare_workspace(
@@ -172,7 +195,10 @@ class ExecutionManager:
                     state.workspace,
                     state.ticket_id,
                     state.assignment_id,
+                    prepare_command=plan.prepare_command,
+                    profile=plan.profile,
                 )
+                agent_cwd = resolve_agent_cwd(state.workspace, plan.agent_cwd)
             except PrepareError as exc:
                 state.error = str(exc)
                 LOG.error("execution %s workspace preparation failed: %s", state.assignment_id, exc)
@@ -185,7 +211,19 @@ class ExecutionManager:
                     ),
                 )
                 return
+            except ExecutionConfigError as exc:
+                state.error = str(exc)
+                await self._report_terminal(
+                    state,
+                    SkillReport(
+                        state=ReportState.FAILED,
+                        summary=f"Execution profile is invalid for ticket {state.ticket_id}",
+                        error={"code": "invalid_execution", "message": str(exc)},
+                    ),
+                )
+                return
 
+            blocked_bin = install_blocked_shims(state.workspace, plan.blocked_commands)
             async with acp_client.open_prime_agent(
                 self.config,
                 state.workspace,
@@ -196,11 +234,17 @@ class ExecutionManager:
                 state.report_config,
                 state.ticket_id,
                 on_event=lambda event: self._on_event(state, event),
+                agent_cwd=agent_cwd,
+                provider=plan.provider,
+                model=plan.model,
+                thinking=plan.thinking,
+                system_prompt_note=plan.prompt_preamble(state.workspace),
+                blocked_bin=blocked_bin,
             ) as (connection, process, _client):
                 state.connection = connection
                 state.process = process
                 await acp_client.initialize(connection)
-                state.session_id = await acp_client.new_session(connection, state.workspace)
+                state.session_id = await acp_client.new_session(connection, agent_cwd)
                 state.session_ref = await discover_session_ref(state.session_dir, self.config.start_timeout_s)
 
                 prompt_text = state.prompt
@@ -211,14 +255,14 @@ class ExecutionManager:
                     )
                 await asyncio.wait_for(
                     acp_client.prompt(connection, state.session_id, prompt_text),
-                    timeout=self.config.turn_timeout_s,
+                    timeout=plan.timeout_s,
                 )
 
                 if state.terminal_report is None:
                     LOG.info("execution %s ended without a terminal report; enforcing", state.assignment_id)
                     await asyncio.wait_for(
                         acp_client.prompt(connection, state.session_id, ENFORCEMENT_PROMPT),
-                        timeout=self.config.turn_timeout_s,
+                        timeout=plan.timeout_s,
                     )
                     await asyncio.sleep(0.2)
 
@@ -295,12 +339,39 @@ class ExecutionManager:
             state.latest_report = report
             state.seq += 1
             if report.state is ReportState.COMPLETED:
+                plan = state.plan or ExecutionPlan.from_config(self.config, profile=state.profile)
+                report = report.model_copy(
+                    update={
+                        "artifacts": normalize_artifacts(
+                            state.workspace, plan.artifact_root, report.artifacts
+                        )
+                    }
+                )
+                if not state.metadata_done:
+                    try:
+                        agent_cwd = resolve_agent_cwd(state.workspace, plan.agent_cwd)
+                    except ExecutionConfigError as exc:
+                        metadata: dict[str, Any] | None = None
+                        metadata_error: str | None = f"metadata skipped: {exc}"
+                    else:
+                        metadata, metadata_error = await collect_workspace_metadata(
+                            self.config,
+                            state.workspace,
+                            agent_cwd,
+                            command=plan.metadata_command,
+                            ticket_id=state.ticket_id,
+                            assignment_id=state.assignment_id,
+                        )
+                    state.workspace_metadata = metadata
+                    state.metadata_error = metadata_error
+                    state.metadata_done = True
                 delivery = deliver_artifacts(
                     state.workspace,
                     state.origin_cwd,
                     report.artifacts,
                     self.config,
                     state.ticket_id,
+                    options=plan.delivery,
                 )
                 state.delivered_to = delivery.delivered_to
                 state.delivery_error = delivery.error
@@ -313,6 +384,8 @@ class ExecutionManager:
                 report=report,
                 delivered_to=state.delivered_to,
                 delivery_error=state.delivery_error,
+                workspace_metadata=state.workspace_metadata,
+                metadata_error=state.metadata_error,
             )
             ack = await self.forwarder.forward(worker_report)
             if report.state in TERMINAL_STATES:
@@ -351,6 +424,8 @@ class ExecutionManager:
                 report=report,
                 delivered_to=state.delivered_to,
                 delivery_error=state.delivery_error,
+                workspace_metadata=state.workspace_metadata,
+                metadata_error=state.metadata_error,
             )
             try:
                 await self.forwarder.forward(worker_report)

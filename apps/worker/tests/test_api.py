@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from super_rlm_protocol import ReportAck, SkillReport
 from super_rlm_worker.api import create_app
 from super_rlm_worker.config import WorkerConfig
-from super_rlm_worker.executor import AtCapacity, InvalidReportToken
+from super_rlm_worker.executor import AtCapacity, InvalidExecution, InvalidReportToken
 
 
 class StubManager:
@@ -66,6 +66,23 @@ def test_at_capacity_is_409(tmp_path):
     })
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "at_capacity"
+
+
+def test_invalid_execution_is_400(tmp_path):
+    class InvalidManager(StubManager):
+        async def start(self, request):
+            raise InvalidExecution("thinking must be one of the allowed levels")
+
+    client = TestClient(create_app(InvalidManager(), config(tmp_path)))
+    response = client.post("/v1/executions", json={
+        "ticket_id": "tkt_1",
+        "assignment_id": "asg_1",
+        "prompt": "do it",
+        "profile": "default",
+        "workspace": str(tmp_path / "workspace"),
+    })
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_execution"
 
 
 def test_report_requires_token(tmp_path):

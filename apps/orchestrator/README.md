@@ -33,6 +33,16 @@ bundled by the project.
 | `SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK` | `2` | Per-Task normal running limit. |
 | `SUPER_RLM_PRIORITY_RESERVED` | `1` | Slots reserved for answer/resume. |
 | `SUPER_RLM_WORKER_LEASE_MS` | `30000` | Heartbeat lease. |
+| `SUPER_RLM_PROFILES_CONFIG` | `<repo>/config/profiles.yaml` | Named Worker profiles. |
+
+## Profiles
+
+`config/profiles.yaml` defines named capability profiles. The Orchestrator
+validates each Ticket's `profile` (`default` when omitted), rejects unknown names
+with `unknown_profile`, and sends the resolved provider/model/thinking, timeout,
+prepare and blocked commands, workspace layout, and delivery policy as
+`ExecutionRequest.execution`. `GET /v1/profiles` exposes only the sanitized
+name, description, provider, model, and thinking fields.
 
 ## Routes
 

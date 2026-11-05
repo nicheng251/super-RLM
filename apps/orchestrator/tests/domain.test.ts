@@ -1,7 +1,6 @@
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -12,7 +11,7 @@ import {
   isTerminalTicket,
   reportOutcome,
   ticketResult,
-  workspaceDetails,
+  ticketSummary,
 } from "../src/domain.ts";
 import type { SlotCounts, SlotPolicy, TicketRecord, TicketStatus } from "../src/domain.ts";
 
@@ -96,6 +95,8 @@ function ticketRecord(ticketId: string): TicketRecord {
     resume_message: null,
     delivered_to: [],
     delivery_error: null,
+    workspace_metadata: null,
+    metadata_error: null,
     created_at: "2026-11-05T00:00:00Z",
     updated_at: "2026-11-05T00:00:01Z",
   };
@@ -107,47 +108,51 @@ test("ticket results expose the workspace under the configured root", () => {
   assert.equal(result.workspace, join(root, "tkt_missing"));
   assert.equal(result.branch, null);
   assert.equal(result.commit, null);
+  assert.equal(result.workspace_metadata, null);
+  assert.equal(result.metadata_error, null);
 });
 
-test("workspace details read the git branch and commit", () => {
+test("ticket views return reported workspace metadata", () => {
   const root = mkdtempSync(join(tmpdir(), "super-rlm-workspaces-"));
-  const workspace = join(root, "tkt_git");
-  mkdirSync(workspace);
-  execFileSync("git", ["-c", "core.autocrlf=false", "init", "-q"], { cwd: workspace });
-  writeFileSync(join(workspace, "README.md"), "# Ticket\n");
-  execFileSync("git", ["-c", "core.autocrlf=false", "add", "README.md"], { cwd: workspace });
-  execFileSync("git", [
-    "-c", "core.autocrlf=false",
-    "-c", "user.name=super-rlm",
-    "-c", "user.email=super-rlm@example.invalid",
-    "commit", "-q", "-m", "ticket output",
-  ], { cwd: workspace });
-  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: workspace, encoding: "utf8" }).trim();
+  const ticket = ticketRecord("tkt_meta");
+  ticket.workspace_metadata = {
+    vcs: "git",
+    branch: "ticket/output",
+    commit: "0123456789abcdef",
+    files: 3,
+  };
+  ticket.metadata_error = "ignored extra metadata";
 
-  const details = workspaceDetails(root, "tkt_git");
-  assert.equal(details.workspace, workspace);
-  assert.equal(details.commit, commit);
-  assert.ok(details.branch);
+  const result = ticketResult(ticket, 20_000, root);
+  assert.deepEqual(result.workspace_metadata, ticket.workspace_metadata);
+  assert.equal(result.metadata_error, "ignored extra metadata");
+  assert.equal(result.branch, "ticket/output");
+  assert.equal(result.commit, "0123456789abcdef");
+
+  const summary = ticketSummary(ticket, root);
+  assert.deepEqual(summary.workspace_metadata, ticket.workspace_metadata);
+  assert.equal(summary.metadata_error, "ignored extra metadata");
+  assert.equal(summary.branch, "ticket/output");
+  assert.equal(summary.commit, "0123456789abcdef");
 });
 
-test("workspace details prefer a prepared repo checkout", () => {
+test("non-git workspace metadata exposes no branch or commit", () => {
   const root = mkdtempSync(join(tmpdir(), "super-rlm-workspaces-"));
-  const workspace = join(root, "tkt_repo");
-  const checkout = join(workspace, "repo");
-  mkdirSync(checkout, { recursive: true });
-  execFileSync("git", ["-c", "core.autocrlf=false", "init", "-q"], { cwd: checkout });
-  writeFileSync(join(checkout, "README.md"), "# Ticket\n");
-  execFileSync("git", ["-c", "core.autocrlf=false", "add", "README.md"], { cwd: checkout });
-  execFileSync("git", [
-    "-c", "core.autocrlf=false",
-    "-c", "user.name=super-rlm",
-    "-c", "user.email=super-rlm@example.invalid",
-    "commit", "-q", "-m", "ticket output",
-  ], { cwd: checkout });
-  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: checkout, encoding: "utf8" }).trim();
+  const ticket = ticketRecord("tkt_plain");
+  ticket.workspace_metadata = { vcs: "none", files: 2 };
 
-  const details = workspaceDetails(root, "tkt_repo");
-  assert.equal(details.workspace, workspace);
-  assert.equal(details.commit, commit);
-  assert.ok(details.branch);
+  const result = ticketResult(ticket, 20_000, root);
+  assert.deepEqual(result.workspace_metadata, { vcs: "none", files: 2 });
+  assert.equal(result.branch, null);
+  assert.equal(result.commit, null);
+  assert.equal(ticketSummary(ticket, root).branch, null);
+});
+
+test("git metadata without branch and commit yields nulls", () => {
+  const ticket = ticketRecord("tkt_git");
+  ticket.workspace_metadata = { vcs: "git" };
+
+  const result = ticketResult(ticket);
+  assert.equal(result.branch, null);
+  assert.equal(result.commit, null);
 });

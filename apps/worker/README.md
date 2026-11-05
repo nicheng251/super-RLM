@@ -47,18 +47,56 @@ resume.
 ## Execution lifecycle
 
 1. Create a per-Ticket workspace and session directory.
-2. Run the one-time workspace preparation command, if configured.
-3. Spawn `prime-agent --mode acp` with project-owned paths and the report skill.
-4. `initialize` -> `session/new` -> `session/prompt`.
-5. Record the durable `session_ref` from the session file.
-6. The report skill posts `progress` / `waiting` / `blocked` / `completed` /
+2. Resolve `ExecutionRequest.execution` into an execution plan, falling back to
+   the Worker's global configuration when it is absent.
+3. Run the one-time workspace preparation command, if configured.
+4. Create `.super-rlm-bin` shims for blocked commands and prepend it to PATH.
+5. Spawn `prime-agent --mode acp` with the profile provider/model/thinking,
+   `agent_cwd` as its working directory, and the report skill.
+6. `initialize` -> `session/new` -> `session/prompt`.
+7. Record the durable `session_ref` from the session file.
+8. The report skill posts `progress` / `waiting` / `blocked` / `completed` /
    `dropped` / `failed` / `cancelled` to the Worker.
-7. The Worker forwards a `WorkerReport` with a monotonic `seq`, idempotency key,
-   and HMAC-SHA256 signature over `timestamp + nonce + raw body`.
-8. A turn without a terminal report gets one enforcement prompt; still missing
-   becomes `failed / missing_report`.
-9. The Worker sends assignment heartbeats with the current phase.
-10. `waiting` / `blocked` close ACP but keep the session file for `--resume`.
+9. On `completed`, the Worker normalizes artifact paths, runs the optional
+   `metadata_command`, delivers results, and forwards the `WorkerReport`.
+10. The Worker forwards a `WorkerReport` with a monotonic `seq`, idempotency key,
+    and HMAC-SHA256 signature over `timestamp + nonce + raw body`.
+11. A turn without a terminal report gets one enforcement prompt; still missing
+    becomes `failed / missing_report`.
+12. The Worker sends assignment heartbeats with the current phase.
+13. `waiting` / `blocked` close ACP but keep the session file for `--resume`.
+
+## Execution profiles
+
+The Orchestrator resolves one named execution profile per Ticket and sends the
+resolved values in `ExecutionRequest.execution`. The Worker never reads
+`config/profiles.yaml`. Every field falls back to the global environment when
+`execution` is absent.
+
+| Field | Effect |
+| --- | --- |
+| `provider`, `model` | `--provider` / `--model` for Prime Agent. |
+| `thinking` | `--thinking`; one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. |
+| `timeout_s` | Per-ACP-turn timeout for the Ticket and its enforcement prompt. |
+| `prepare_command` | Per-profile override of `SUPER_RLM_PREPARE_COMMAND`. |
+| `blocked_commands` | Command-name shims in `<workspace>/.super-rlm-bin`, prepended to PATH. |
+| `workspace.agent_cwd` | Prime Agent's working directory, relative to the workspace. |
+| `workspace.artifact_root` | Base for reported artifact paths; normalized to workspace-relative paths. |
+| `workspace.metadata_command` | Optional command whose JSON stdout becomes `workspace_metadata`. |
+| `delivery.*` | Overrides `SUPER_RLM_DELIVERY_*` for this Assignment. |
+
+`agent_cwd` must be a relative path inside the workspace and must exist after
+workspace preparation. `artifact_root` is a safe relative path; an artifact
+path that already starts with the root is not prefixed twice. The Worker adds a
+short execution-profile note (workspace root, agent cwd, artifact root, blocked
+commands) to Prime Agent's system prompt through `--append-system-prompt`.
+
+`metadata_command` runs in `agent_cwd` after a `completed` report. A failure or
+non-JSON output is recorded as `metadata_error`; the Ticket still succeeds.
+
+`blocked_commands` are policy aids, not a sandbox. Each shim prints a message
+and exits 127 when called by name. Absolute paths and unlisted interpreters
+still bypass them. Preparation commands are not blocked.
 
 ## Workspace preparation
 
@@ -128,6 +166,8 @@ policy writes `<name>.super-rlm-<ticket_id><suffix>` instead of overwriting.
 | `SUPER_RLM_DELIVERY_MODE` | `artifacts` | `artifacts`, `workspace`, or `none`. |
 | `SUPER_RLM_DELIVERY_COLLISION` | `version` | `version`, `overwrite`, or `error`. |
 | `SUPER_RLM_DELIVERY_STRIP_PREFIX` | unset | Artifact path prefix removed on delivery. |
+| `SUPER_RLM_DELIVERY_WORKSPACE_SUBDIR` | `.super-rlm` | Subdirectory for `workspace` delivery. |
+| `SUPER_RLM_METADATA_TIMEOUT_S` | `60` | `metadata_command` timeout. |
 | `SUPER_RLM_REPORT_SKILL` | repo skill dir | `super-rlm-report` skill path. |
 | `SUPER_RLM_WORKER_PROMPT` | repo prompt | Appended Worker system prompt. |
 | `SUPER_RLM_TURN_TIMEOUT_S` | `3600` | Per-ACP-turn timeout. |
@@ -147,5 +187,4 @@ kernel venv is missing.
 ## Deferred
 
 - Per-Worker control tokens and scoped bearer tokens.
-- Per-profile `blocked_commands` and preparation overrides.
 - Hardened container isolation.

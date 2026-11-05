@@ -1,0 +1,55 @@
+# Worker capability profiles.
+#
+# A Ticket selects one profile by name. Profiles never contain credentials:
+# `provider` and `model` refer to config/models.yaml. The Orchestrator resolves
+# a profile into ExecutionOptions and sends it with each Assignment.
+
+profiles:
+  default:
+    description: General-purpose worker
+    provider: deepseek
+    model: deepseek-flash
+    thinking: medium
+    timeout_s: 3600
+    prepare_command: null
+    blocked_commands: []
+    workspace:
+      agent_cwd: "."
+      artifact_root: "."
+    delivery:
+      mode: artifacts
+      collision: version
+
+  git:
+    description: Ticket running in a dedicated git worktree
+    provider: deepseek
+    model: deepseek-flash
+    thinking: medium
+    timeout_s: 7200
+    # The Worker builds <workspace>/repo from SUPER_RLM_PROJECT_REPO. The
+    # repository path is configuration, not part of this file.
+    prepare_command: >-
+      set -e;
+      repo="${SUPER_RLM_PROJECT_REPO:?SUPER_RLM_PROJECT_REPO is not set}";
+      target="${SUPER_RLM_WORKSPACE:?SUPER_RLM_WORKSPACE is not set}/repo";
+      branch="super-rlm/${SUPER_RLM_TICKET_ID}";
+      if [ ! -e "$target/.git" ]; then
+        if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
+          git -C "$repo" worktree add "$target" "$branch";
+        else
+          git -C "$repo" worktree add -b "$branch" "$target" HEAD;
+        fi;
+      fi
+    # The Worker owns the worktree; the Agent edits files and does not run VCS
+    # commands that could rewrite the shared repository.
+    blocked_commands: [git, gh]
+    workspace:
+      agent_cwd: repo
+      artifact_root: "."
+      metadata_command: >-
+        repo="${SUPER_RLM_WORKSPACE:-.}/repo";
+        branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD);
+        commit=$(git -C "$repo" rev-parse HEAD);
+        printf '{"vcs":"git","branch":"%s","commit":"%s"}\n' "$branch" "$commit"
+    delivery:
+      mode: none

@@ -132,6 +132,8 @@ def test_workspace_mode_excludes_markers_and_git(
     (workspace / ".git" / "config").write_text("git", encoding="utf-8")
     (workspace / ".super-rlm-report.json").write_text("{}", encoding="utf-8")
     (workspace / ".super-rlm-prepared").write_text("{}", encoding="utf-8")
+    (workspace / ".super-rlm-bin").mkdir()
+    (workspace / ".super-rlm-bin" / "npm").write_text("shim", encoding="utf-8")
     config = make_config(tmp_path, SUPER_RLM_DELIVERY_MODE="workspace")
 
     result = deliver_artifacts(workspace, str(origin), [], config, "tkt_1")
@@ -143,6 +145,7 @@ def test_workspace_mode_excludes_markers_and_git(
     assert not (destination / ".git").exists()
     assert not (destination / ".super-rlm-report.json").exists()
     assert not (destination / ".super-rlm-prepared").exists()
+    assert not (destination / ".super-rlm-bin").exists()
 
 
 class FakeForwarder:

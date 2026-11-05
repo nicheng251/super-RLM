@@ -7,6 +7,7 @@ import { runDev } from "./commands/dev.ts";
 import { runDoctor } from "./commands/doctor.ts";
 import { runInit } from "./commands/init.ts";
 import { syncModels } from "./commands/models.ts";
+import { runProfiles } from "./commands/profiles.ts";
 import { runRouter } from "./commands/router.ts";
 import { runTasks } from "./commands/tasks.ts";
 import { ensureAllServices, serviceState, stopAllServices } from "./services.ts";
@@ -32,6 +33,9 @@ Usage:
   super-rlm init                 Create .super-rlm-project.json
   super-rlm bootstrap [--dry-run]  Prepare the project kernel venv and report skill
   super-rlm models sync [--dry-run]  Write project Pi/Prime models.json from config/models.yaml
+  super-rlm profiles list        List Worker profiles from config/profiles.yaml
+  super-rlm profiles show <name> Show one Worker profile
+  super-rlm profiles validate    Validate config/profiles.yaml
   super-rlm config               Print resolved configuration
 
 Node is a host prerequisite (>= 22.19). The project owns Pi and Prime Agent.`);
@@ -86,6 +90,9 @@ async function main(): Promise<number> {
   if (command === "bootstrap") return runBootstrap(loadConfig(), { dryRun: rest.includes("--dry-run") });
   if (command === "models" && rest[1] === "sync") {
     return syncModels(loadConfig(), { dryRun: rest.includes("--dry-run") });
+  }
+  if (command === "profiles") {
+    return runProfiles(loadConfig(), argv.slice(1));
   }
 
   if (command === "router") {

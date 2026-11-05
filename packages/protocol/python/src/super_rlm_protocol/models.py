@@ -145,6 +145,8 @@ class TicketSummary(BaseModel):
     workspace: str | None = None
     branch: str | None = None
     commit: str | None = None
+    workspace_metadata: dict[str, Any] | None = None
+    metadata_error: str | None = None
     delivered_to: list[str] = Field(default_factory=list)
     delivery_error: str | None = None
 
@@ -165,6 +167,8 @@ class TicketResult(BaseModel):
     workspace: str | None = None
     branch: str | None = None
     commit: str | None = None
+    workspace_metadata: dict[str, Any] | None = None
+    metadata_error: str | None = None
     delivered_to: list[str] = Field(default_factory=list)
     delivery_error: str | None = None
 
@@ -312,6 +316,49 @@ class ResumeSpec(BaseModel):
     message: str | None = None
 
 
+ThinkingLevel = Literal["off", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+
+class WorkspaceOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent_cwd: str = "."
+    artifact_root: str = "."
+    metadata_command: str | None = None
+
+
+class DeliveryOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["artifacts", "workspace", "none"] = "artifacts"
+    collision: Literal["version", "overwrite", "error"] = "version"
+    strip_prefix: str = ""
+    workspace_subdir: str | None = None
+
+
+class ExecutionOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    thinking: ThinkingLevel = "medium"
+    timeout_s: int = Field(default=3600, gt=0)
+    prepare_command: str | None = None
+    blocked_commands: list[str] = Field(default_factory=list)
+    workspace: WorkspaceOptions = Field(default_factory=WorkspaceOptions)
+    delivery: DeliveryOptions = Field(default_factory=DeliveryOptions)
+
+
+class ProfileSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    description: str = ""
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    thinking: ThinkingLevel
+
+
 class ExecutionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -320,6 +367,7 @@ class ExecutionRequest(BaseModel):
     prompt: str = Field(min_length=1)
     profile: str = "default"
     workspace: str = Field(min_length=1)
+    execution: ExecutionOptions | None = None
     origin_cwd: str | None = None
     deadline: datetime | None = None
     resume: ResumeSpec | None = None
@@ -374,6 +422,8 @@ class WorkerReport(BaseModel):
     resumed: bool | None = None
     recovery: bool | None = None
     question: Question | None = None
+    workspace_metadata: dict[str, Any] | None = None
+    metadata_error: str | None = None
     delivered_to: list[str] = Field(default_factory=list)
     delivery_error: str | None = None
     timestamp: datetime

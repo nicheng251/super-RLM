@@ -88,6 +88,50 @@
       "title": "CreatedTicket",
       "type": "object"
     },
+    "DeliveryOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "default": "artifacts",
+          "enum": [
+            "artifacts",
+            "workspace",
+            "none"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "collision": {
+          "default": "version",
+          "enum": [
+            "version",
+            "overwrite",
+            "error"
+          ],
+          "title": "Collision",
+          "type": "string"
+        },
+        "strip_prefix": {
+          "default": "",
+          "title": "Strip Prefix",
+          "type": "string"
+        },
+        "workspace_subdir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Subdir"
+        }
+      },
+      "title": "DeliveryOptions",
+      "type": "object"
+    },
     "ErrorObject": {
       "additionalProperties": false,
       "properties": {
@@ -280,6 +324,72 @@
       "title": "EventType",
       "type": "string"
     },
+    "ExecutionOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "thinking": {
+          "default": "medium",
+          "enum": [
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "title": "Thinking",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 3600,
+          "exclusiveMinimum": 0,
+          "title": "Timeout S",
+          "type": "integer"
+        },
+        "prepare_command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prepare Command"
+        },
+        "blocked_commands": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocked Commands",
+          "type": "array"
+        },
+        "workspace": {
+          "$ref": "#/$defs/WorkspaceOptions"
+        },
+        "delivery": {
+          "$ref": "#/$defs/DeliveryOptions"
+        }
+      },
+      "required": [
+        "provider",
+        "model"
+      ],
+      "title": "ExecutionOptions",
+      "type": "object"
+    },
     "ExecutionRequest": {
       "additionalProperties": false,
       "properties": {
@@ -309,6 +419,17 @@
           "minLength": 1,
           "title": "Workspace",
           "type": "string"
+        },
+        "execution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionOptions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "origin_cwd": {
           "anyOf": [
@@ -376,6 +497,52 @@
         "execution_id"
       ],
       "title": "ExecutionResponse",
+      "type": "object"
+    },
+    "ProfileSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "provider": {
+          "minLength": 1,
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "thinking": {
+          "enum": [
+            "off",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "title": "Thinking",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "provider",
+        "model",
+        "thinking"
+      ],
+      "title": "ProfileSummary",
       "type": "object"
     },
     "Question": {
@@ -1278,6 +1445,31 @@
           "default": null,
           "title": "Commit"
         },
+        "workspace_metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Metadata"
+        },
+        "metadata_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metadata Error"
+        },
         "delivered_to": {
           "items": {
             "type": "string"
@@ -1493,6 +1685,31 @@
           ],
           "default": null,
           "title": "Commit"
+        },
+        "workspace_metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Metadata"
+        },
+        "metadata_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metadata Error"
         },
         "delivered_to": {
           "items": {
@@ -1780,6 +1997,31 @@
           ],
           "default": null
         },
+        "workspace_metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Metadata"
+        },
+        "metadata_error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metadata Error"
+        },
         "delivered_to": {
           "items": {
             "type": "string"
@@ -1953,6 +2195,35 @@
           }
         }
       ]
+    },
+    "WorkspaceOptions": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_cwd": {
+          "default": ".",
+          "title": "Agent Cwd",
+          "type": "string"
+        },
+        "artifact_root": {
+          "default": ".",
+          "title": "Artifact Root",
+          "type": "string"
+        },
+        "metadata_command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metadata Command"
+        }
+      },
+      "title": "WorkspaceOptions",
+      "type": "object"
     }
   }
 }

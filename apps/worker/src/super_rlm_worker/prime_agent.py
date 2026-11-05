@@ -18,6 +18,15 @@ def strip_inherited_agent_env(env: dict[str, str]) -> dict[str, str]:
     }
 
 
+def prepend_path(env: dict[str, str], directory: Path) -> None:
+    """Prepend ``directory`` to PATH, preserving the platform's casing."""
+    for key in list(env):
+        if key.upper() == "PATH":
+            env[key] = str(directory) + os.pathsep + env[key]
+            return
+    env["PATH"] = str(directory)
+
+
 def build_env(
     config: WorkerConfig,
     workspace: Path,
@@ -26,6 +35,7 @@ def build_env(
     report_url: str,
     report_token: str,
     report_config: Path,
+    blocked_bin: Path | None = None,
 ) -> dict[str, str]:
     env = strip_inherited_agent_env(dict(os.environ))
     env.update({
@@ -45,6 +55,8 @@ def build_env(
     })
     if config.bash_shell:
         env["PRIME_AGENT_BASH_SHELL"] = config.bash_shell
+    if blocked_bin is not None:
+        prepend_path(env, blocked_bin.resolve())
     return env
 
 
@@ -53,12 +65,17 @@ def build_args(
     workspace: Path,
     session_dir: Path,
     session_ref: str | None,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    thinking: str | None = None,
+    system_prompt_note: str | None = None,
 ) -> list[str]:
     args = [
         "--mode", "acp",
         "--cwd", str(workspace),
-        "--provider", config.prime_provider,
-        "--model", config.prime_model,
+        "--provider", provider or config.prime_provider,
+        "--model", model or config.prime_model,
         "--session-dir", str(session_dir),
         "--daemon-socket", str(config.daemon_socket),
         "--skill", str(config.report_skill),
@@ -67,8 +84,12 @@ def build_args(
         "--no-prompt-templates",
         "--no-themes",
     ]
+    if thinking:
+        args += ["--thinking", thinking]
     if config.worker_prompt.exists():
         args += ["--append-system-prompt", str(config.worker_prompt)]
+    if system_prompt_note:
+        args += ["--append-system-prompt", system_prompt_note]
     if session_ref:
         args += ["--resume", session_ref]
     return args

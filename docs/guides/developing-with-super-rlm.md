@@ -10,32 +10,45 @@ in a per-Ticket runtime workspace:
 <SUPER_RLM_HOME>/workspaces/<ticket_id>/
 ```
 
-For real project work, prepare that workspace as a git worktree of your
-project. Do not let the Worker modify your main checkout.
+For real project work, select the `git` profile. It prepares a dedicated
+worktree and starts Prime Agent inside it.
 
 ## 1. Configure the project
 
-Use a project-specific runtime root:
+Set the project runtime and the main checkout:
 
 ```powershell
 $env:SUPER_RLM_HOME="C:\Users\15065\.super-rlm\projects\my-app"
 $env:SUPER_RLM_PORT="18796"
 $env:SUPER_RLM_WORKER_PORT="18087"
 $env:SUPER_RLM_PROJECT_REPO="C:/Users/15065/Project/my-app"
-$env:SUPER_RLM_PREPARE_COMMAND='git -C "$SUPER_RLM_PROJECT_REPO" worktree add ./repo -b "agent/$SUPER_RLM_TICKET_ID" main'
 ```
 
-Notes:
+Profiles live in:
 
-- `SUPER_RLM_PROJECT_REPO` must be the path to the main checkout.
-- In Git Bash, use forward slashes in the path.
-- The prepare command runs with cwd set to the Ticket workspace.
-- `./repo` is a convention: the Worker writes `<workspace>/.super-rlm-prepared`
-  after it succeeds, and later resume/retry skips preparation.
-- The branch name uses the Ticket ID, so concurrent Tickets get different
-  branches.
+```text
+config/profiles.yaml
+```
 
-One-time setup for the project runtime:
+The checked-in profiles are:
+
+- `default`: general worker, no prepare, delivery `artifacts`.
+- `git`: creates `<workspace>/repo` as a git worktree, starts Prime Agent in
+  `repo`, blocks Agent `git`/`gh`, reads branch/commit via `metadata_command`,
+  delivery `none`.
+
+The `git` profile uses:
+
+```yaml
+prepare_command: |
+  set -e;
+  repo="${SUPER_RLM_PROJECT_REPO:?SUPER_RLM_PROJECT_REPO is not set}";
+  target="${SUPER_RLM_WORKSPACE:?SUPER_RLM_WORKSPACE is not set}/repo";
+  branch="super-rlm/${SUPER_RLM_TICKET_ID}";
+  ...
+```
+
+One-time setup:
 
 ```powershell
 node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts bootstrap
@@ -66,9 +79,23 @@ The Router will:
 2. start missing services in the background;
 3. launch the Pi TUI.
 
-## 3. Create a Ticket
+List or validate profiles without starting the Orchestrator:
 
-The Ticket prompt must tell the Worker where the prepared checkout is. Example:
+```powershell
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles list
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles show git
+node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts profiles validate
+```
+
+## 3. Create a Ticket with the git profile
+
+Ask the Router for a `git` profile Ticket, or create it through the API/CLI with:
+
+```text
+profile: git
+```
+
+The Ticket prompt should tell the Agent where the prepared checkout is:
 
 ```text
 The project checkout is available at ./repo inside the current workspace.
@@ -76,9 +103,7 @@ Work ONLY inside ./repo. Do not modify anything outside it.
 
 Implement <change>.
 Run the relevant tests.
-Commit the result:
-  git -C repo add -A
-  git -C repo -c user.name=super-rlm -c user.email=super-rlm@example.invalid commit -m "..."
+Do not run git; the Worker owns the worktree and metadata.
 Then call super_rlm_report with:
   state=completed
   summary="..."
@@ -86,36 +111,12 @@ Then call super_rlm_report with:
   artifacts=[{"type":"file","path":"repo/<file>"}]
 ```
 
+The `git` profile blocks `git` and `gh` for the Agent. That keeps the
+worktree/Repository under Worker control. If your workflow needs the Agent to
+run git itself, create a profile with a smaller `blocked_commands` list.
+
 `task_create` returns immediately. Do not call `task_wait`; the Router receives
 an SSE notification when the Task settles.
-
-
-## Result delivery
-
-The CLI captures the directory where you launched it as `SUPER_RLM_ORIGIN_CWD`.
-The Router stores it on the Task, and the Worker copies a completed Ticket's
-reported artifacts back to that directory.
-
-```powershell
-$env:SUPER_RLM_DELIVERY_MODE="artifacts"      # artifacts | workspace | none
-$env:SUPER_RLM_DELIVERY_COLLISION="version"   # version | overwrite | error
-$env:SUPER_RLM_DELIVERY_STRIP_PREFIX="repo"   # optional, e.g. for worktrees
-```
-
-- `artifacts` copies only the files reported in `artifacts`.
-- `workspace` copies the whole workspace to
-  `<origin>/.super-rlm/<ticket_id>/`.
-- `none` disables automatic delivery.
-- `version` keeps an existing file and writes
-  `<name>.super-rlm-<ticket_id><suffix>` instead.
-- `strip_prefix: repo` turns `repo/hello.txt` into `hello.txt` in the origin
-  directory.
-- Delivery failures do not fail the Ticket; they appear as `delivery_error`
-  and the workspace remains available.
-
-For a project checkout, code changes are usually reviewed through the branch
-and worktree. Delivery is most useful for reports, generated files, and small
-deliverables.
 
 ## 4. Review and merge
 
@@ -124,8 +125,14 @@ The result includes:
 ```json
 {
   "workspace": "C:\\...\\workspaces\\tkt_...",
-  "branch": "agent/tkt_...",
-  "commit": "abc123"
+  "workspace_metadata": {
+    "vcs": "git",
+    "branch": "super-rlm/tkt_...",
+    "commit": "..."
+  },
+  "branch": "super-rlm/tkt_...",
+  "commit": "...",
+  "delivered_to": []
 }
 ```
 
@@ -134,44 +141,72 @@ Review in the main checkout:
 ```powershell
 cd C:\Users\15065\Project\my-app
 git worktree list
-git diff main...agent/tkt_...
-git log --oneline main..agent/tkt_...
+git -C C:\Users\15065\.super-rlm\projects\my-app\workspaces\<ticket_id>\repo diff
+git -C ... status
 ```
 
-Merge:
+The Agent is blocked from running git, so the worktree normally has uncommitted
+changes. Review, then commit and merge manually:
 
 ```powershell
-git merge --no-ff agent/tkt_...
+git -C <worktree> add -A
+git -C <worktree> -c user.name=super-rlm -c user.email=super-rlm@example.invalid commit -m "..."
+git merge --no-ff super-rlm/tkt_...
 ```
 
-Clean up the worktree:
+Clean up:
 
 ```powershell
-git worktree remove "C:\Users\15065\.super-rlm\projects\my-app\workspaces\<ticket_id>\repo"
-git branch -d agent/tkt_...
+git worktree remove "<worktree>"
+git branch -d super-rlm/tkt_...
 ```
 
-## 5. Copy artifacts
+## Result delivery
 
-Artifacts are relative paths inside the Ticket workspace. Copy them to a chosen
-directory:
+The CLI captures the directory where you launched it as `SUPER_RLM_ORIGIN_CWD`.
+The Worker delivers a completed Ticket according to its profile:
+
+```yaml
+delivery:
+  mode: artifacts      # artifacts | workspace | none
+  collision: version   # version | overwrite | error
+  strip_prefix: repo   # optional
+```
+
+- `artifacts` copies reported files to the launch directory.
+- `workspace` copies the whole workspace to
+  `<origin>/<workspace_subdir>/<ticket_id>/`.
+- `none` disables automatic delivery.
+- `version` keeps existing files and writes
+  `<name>.super-rlm-<ticket_id><suffix>` instead.
+
+The global fallbacks are:
+
+```powershell
+$env:SUPER_RLM_DELIVERY_MODE="artifacts"
+$env:SUPER_RLM_DELIVERY_COLLISION="version"
+$env:SUPER_RLM_DELIVERY_STRIP_PREFIX="repo"
+```
+
+Delivery failures do not fail the Ticket; they appear as `delivery_error`.
+
+## 5. Copy artifacts manually
+
+Artifacts are relative paths inside the Ticket workspace:
 
 ```powershell
 node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts artifacts tkt_... --to C:\temp
-```
-
-Copy the whole workspace instead:
-
-```powershell
 node C:\Users\15065\Project\super-RLM\apps\cli\src\main.ts artifacts tkt_... --all --to C:\temp
 ```
 
-`--all` omits `.git`, `.super-rlm-report.json`, and `.super-rlm-prepared`.
+`--all` omits `.git`, `.super-rlm-report.json`, `.super-rlm-prepared`, and
+`.super-rlm-bin`.
 
 ## Current limits
 
-- Preparation is global (`SUPER_RLM_PREPARE_COMMAND`), not yet per profile.
-- There is no automatic artifact copy-out after a Task settles; use the
-  `artifacts` command.
 - The Worker is not a security sandbox; it runs as your user. Use a dedicated
   OS account or container when untrusted code is involved.
+- `blocked_commands` is a PATH shim, not a hard security boundary; absolute
+  paths can bypass it.
+- The `git` profile leaves changes uncommitted; commit them yourself before
+  merging.

@@ -16,6 +16,8 @@ function fixture(): { config: ReturnType<typeof loadConfig>; workspaceRoot: stri
   writeFileSync(join(workspace, "nested", "report.json"), "{\"ok\":true}\n");
   writeFileSync(join(workspace, ".super-rlm-report.json"), "{\"token\":\"secret\"}");
   writeFileSync(join(workspace, ".super-rlm-prepared"), "{}");
+  mkdirSync(join(workspace, ".super-rlm-bin"));
+  writeFileSync(join(workspace, ".super-rlm-bin", "npm"), "#!/bin/sh\nexit 127\n");
   const config = loadConfig({
     env: { SUPER_RLM_HOME: home, SUPER_RLM_WORKSPACES: workspaceRoot },
     cwd: tmpdir(),
@@ -31,10 +33,14 @@ test("copyTicketArtifacts copies files and nested artifacts", () => {
       { type: "file" as const, path: "out.md" },
       { type: "file" as const, path: "nested/report.json" },
     ],
+    workspace_metadata: { vcs: "none", files: 2 },
+    metadata_error: "optional metadata warning",
   };
 
   const copy = copyTicketArtifacts(config, "tkt_1", result, destination);
   assert.equal(copy.files, 2);
+  assert.deepEqual(copy.workspace_metadata, { vcs: "none", files: 2 });
+  assert.equal(copy.metadata_error, "optional metadata warning");
   assert.ok(existsSync(join(destination, "out.md")));
   assert.ok(existsSync(join(destination, "nested", "report.json")));
   assert.deepEqual(copy.copied, [
@@ -83,10 +89,13 @@ test("copyTicketArtifacts --all copies the whole workspace", () => {
 
   assert.equal(copy.destination, root);
   assert.equal(copy.files, 2);
+  assert.equal(copy.workspace_metadata, null);
+  assert.equal(copy.metadata_error, null);
   assert.ok(existsSync(join(root, "out.md")));
   assert.ok(existsSync(join(root, "nested", "report.json")));
   assert.equal(existsSync(join(root, ".super-rlm-report.json")), false);
   assert.equal(existsSync(join(root, ".super-rlm-prepared")), false);
+  assert.equal(existsSync(join(root, ".super-rlm-bin")), false);
 });
 
 test("copyTicketArtifacts rejects a ticket without artifacts unless --all is set", () => {

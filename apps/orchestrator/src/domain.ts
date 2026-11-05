@@ -6,8 +6,6 @@
  * the store and scheduler share one shape.
  */
 
-import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type {
   Artifact,
@@ -64,6 +62,8 @@ export interface TicketRecord {
   resume_message: string | null;
   delivered_to: string[];
   delivery_error: string | null;
+  workspace_metadata: Record<string, unknown> | null;
+  metadata_error: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -211,40 +211,12 @@ export function canStart(
   return counts.normalRunning < normalCap && counts.taskNormalRunning < policy.perTaskMax;
 }
 
-export interface WorkspaceDetails {
-  workspace: string;
-  branch: string | null;
-  commit: string | null;
-}
-
-function gitValue(checkout: string, args: string[]): string | null {
-  try {
-    const value = execFileSync("git", ["-C", checkout, ...args], {
-      encoding: "utf8",
-      timeout: 2_000,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return value || null;
-  } catch {
-    return null;
-  }
-}
-
-/** A prepared workspace conventionally keeps its checkout in <workspace>/repo. */
-function gitCheckout(workspace: string): string {
-  const nested = join(workspace, "repo");
-  return existsSync(join(nested, ".git")) ? nested : workspace;
-}
-
-/** Workspace location and git identity for a Ticket. Missing workspaces or non-git directories yield nulls. */
-export function workspaceDetails(workspaceRoot: string, ticketId: string): WorkspaceDetails {
-  const workspace = join(workspaceRoot, ticketId);
-  if (!existsSync(workspace)) return { workspace, branch: null, commit: null };
-  const checkout = gitCheckout(workspace);
+/** Legacy branch/commit are only exposed when the reported metadata identifies a git checkout. */
+function gitIdentity(metadata: Record<string, unknown> | null): { branch: string | null; commit: string | null } {
+  if (!metadata || metadata.vcs !== "git") return { branch: null, commit: null };
   return {
-    workspace,
-    branch: gitValue(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]),
-    commit: gitValue(checkout, ["rev-parse", "HEAD"]),
+    branch: typeof metadata.branch === "string" ? metadata.branch : null,
+    commit: typeof metadata.commit === "string" ? metadata.commit : null,
   };
 }
 
@@ -265,7 +237,7 @@ export function taskView(input: {
 
 export function ticketSummary(ticket: TicketRecord, workspaceRoot?: string): TicketSummary {
   const workspace = workspaceRoot ? join(workspaceRoot, ticket.ticket_id) : null;
-  const git = workspaceRoot && isTerminalTicket(ticket.status) ? workspaceDetails(workspaceRoot, ticket.ticket_id) : null;
+  const git = gitIdentity(ticket.workspace_metadata);
   return {
     ticket_id: ticket.ticket_id,
     title: ticket.title,
@@ -277,8 +249,10 @@ export function ticketSummary(ticket: TicketRecord, workspaceRoot?: string): Tic
     outcome: ticket.outcome,
     no_op: ticket.no_op,
     workspace,
-    branch: git?.branch ?? null,
-    commit: git?.commit ?? null,
+    branch: git.branch,
+    commit: git.commit,
+    workspace_metadata: ticket.workspace_metadata,
+    metadata_error: ticket.metadata_error,
     delivered_to: ticket.delivered_to,
     delivery_error: ticket.delivery_error,
   };
@@ -286,7 +260,8 @@ export function ticketSummary(ticket: TicketRecord, workspaceRoot?: string): Tic
 
 export function ticketResult(ticket: TicketRecord, maxChars = 20000, workspaceRoot?: string): TicketResult {
   const result = ticket.result === null ? null : ticket.result.slice(0, maxChars);
-  const workspace = workspaceRoot ? workspaceDetails(workspaceRoot, ticket.ticket_id) : null;
+  const workspace = workspaceRoot ? join(workspaceRoot, ticket.ticket_id) : null;
+  const git = gitIdentity(ticket.workspace_metadata);
   return {
     ticket_id: ticket.ticket_id,
     status: ticket.status,
@@ -298,9 +273,11 @@ export function ticketResult(ticket: TicketRecord, maxChars = 20000, workspaceRo
     session_ref: ticket.session_ref,
     outcome: ticket.outcome,
     no_op: ticket.no_op,
-    workspace: workspace?.workspace ?? null,
-    branch: workspace?.branch ?? null,
-    commit: workspace?.commit ?? null,
+    workspace,
+    branch: git.branch,
+    commit: git.commit,
+    workspace_metadata: ticket.workspace_metadata,
+    metadata_error: ticket.metadata_error,
     delivered_to: ticket.delivered_to,
     delivery_error: ticket.delivery_error,
   };

@@ -8,6 +8,7 @@
 
 import { randomUUID } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
+import { profileExecution, type ProfilesConfig } from "./profiles.ts";
 import type {
   ExecutionRequest,
   ExecutionResponse,
@@ -82,6 +83,7 @@ export interface OrchestratorConfig {
   workerLeaseMs: number;
   dispatchTimeoutMs: number;
   workspaceRoot: string;
+  profiles?: ProfilesConfig;
 }
 
 export const DEFAULT_CONFIG: Omit<OrchestratorConfig, "workspaceRoot"> = {
@@ -140,6 +142,7 @@ export class Orchestrator {
   readonly store: Store;
   readonly config: OrchestratorConfig;
   private readonly dispatch: DispatchFn;
+  private readonly profiles: ProfilesConfig | null;
   private scheduling = false;
   private scheduleAgain = false;
 
@@ -147,6 +150,7 @@ export class Orchestrator {
     this.store = store;
     this.config = config;
     this.dispatch = dispatch;
+    this.profiles = config.profiles ?? null;
   }
 
   private slotPolicy(): SlotPolicy {
@@ -177,6 +181,10 @@ export class Orchestrator {
         throw new OrchestratorError("invalid_ticket_title", "title must be 1..200 characters");
       }
       if (!ticket.prompt.trim()) throw new OrchestratorError("invalid_ticket_prompt", "prompt is required");
+      const profileName = ticket.profile ?? "default";
+      if (this.profiles && !this.profiles.profiles[profileName]) {
+        throw new OrchestratorError("unknown_profile", `unknown profile: ${profileName}`, { profile: profileName });
+      }
       const key = `${ticket.title.trim()}::${ticket.prompt.trim()}`;
       if (seen.has(key)) {
         throw new OrchestratorError("duplicate_ticket", `duplicate ticket: ${ticket.title}`);
@@ -221,6 +229,8 @@ export class Orchestrator {
         resume_message: null,
         delivered_to: [],
         delivery_error: null,
+        workspace_metadata: null,
+        metadata_error: null,
         created_at: now,
         updated_at: now,
       };
@@ -434,6 +444,8 @@ export class Orchestrator {
       this.store.updateTicket(ticket.ticket_id, {
         summary: report.summary ?? ticket.summary,
         session_ref: report.session_ref ?? ticket.session_ref,
+        workspace_metadata: report.workspace_metadata ?? ticket.workspace_metadata,
+        metadata_error: report.metadata_error ?? ticket.metadata_error,
         updated_at: nowIso(),
       });
       this.store.appendEvent({
@@ -462,6 +474,8 @@ export class Orchestrator {
       no_op: outcome.noOp ?? ticket.no_op,
       delivered_to: report.delivered_to ?? [],
       delivery_error: report.delivery_error ?? null,
+      workspace_metadata: report.workspace_metadata ?? ticket.workspace_metadata,
+      metadata_error: report.metadata_error ?? ticket.metadata_error,
       updated_at: nowIso(),
     });
     if (assignment.worker_id) {
@@ -597,6 +611,8 @@ export class Orchestrator {
           ? { session_ref: ticket.session_ref, message: ticket.resume_message ?? undefined }
           : null,
       };
+      const profile = this.profiles?.profiles[ticket.profile];
+      if (profile) request.execution = profileExecution(profile);
       const result = await this.dispatch(worker, request, this.config.dispatchTimeoutMs);
       if (result.ok) {
         this.store.updateAssignment(assignment.assignment_id, {

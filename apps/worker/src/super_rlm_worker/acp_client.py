@@ -85,16 +85,42 @@ async def open_prime_agent(
     report_config: Path,
     ticket_id: str,
     on_event: EventCallback | None = None,
+    *,
+    agent_cwd: Path | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    thinking: str | None = None,
+    system_prompt_note: str | None = None,
+    blocked_bin: Path | None = None,
 ):
     client = PrimeClient(on_event=on_event)
-    env = build_env(config, workspace, ticket_id, session_dir, report_url, report_token, report_config)
-    args = build_args(config, workspace, session_dir, session_ref)
+    env = build_env(
+        config,
+        workspace,
+        ticket_id,
+        session_dir,
+        report_url,
+        report_token,
+        report_config,
+        blocked_bin=blocked_bin,
+    )
+    cwd = agent_cwd or workspace
+    args = build_args(
+        config,
+        cwd,
+        session_dir,
+        session_ref,
+        provider=provider,
+        model=model,
+        thinking=thinking,
+        system_prompt_note=system_prompt_note,
+    )
     async with acp.spawn_agent_process(
         client,
         str(config.prime_agent),
         *args,
         env=env,
-        cwd=str(workspace),
+        cwd=str(cwd),
     ) as (connection, process):
         yield connection, process, client
 

@@ -10,7 +10,28 @@ from super_rlm_protocol import Artifact
 
 from .config import WorkerConfig
 
-WORKSPACE_EXCLUDES = (".git", ".super-rlm-report.json", ".super-rlm-prepared")
+WORKSPACE_EXCLUDES = (".git", ".super-rlm-report.json", ".super-rlm-prepared", ".super-rlm-bin")
+DELIVERY_MODES = {"artifacts", "workspace", "none"}
+COLLISION_MODES = {"version", "overwrite", "error"}
+
+
+@dataclass(frozen=True)
+class DeliveryOptions:
+    """Fully resolved delivery settings for one Assignment."""
+
+    mode: str
+    collision: str
+    strip_prefix: str = ""
+    workspace_subdir: str = ".super-rlm"
+
+    @classmethod
+    def from_config(cls, config: WorkerConfig) -> "DeliveryOptions":
+        return cls(
+            mode=config.delivery_mode,
+            collision=config.delivery_collision,
+            strip_prefix=config.delivery_strip_prefix,
+            workspace_subdir=config.delivery_workspace_subdir,
+        )
 
 
 class DeliveryPathError(ValueError):
@@ -29,13 +50,16 @@ def deliver_artifacts(
     artifacts: list[Artifact],
     config: WorkerConfig,
     ticket_id: str,
+    options: DeliveryOptions | None = None,
 ) -> DeliveryResult:
     """Copy a completed Ticket's artifacts into ``origin_cwd``.
 
     Delivery is best-effort: expected failures are returned in ``error`` and
-    never change the Ticket's state.
+    never change the Ticket's state. ``options`` carries per-profile settings;
+    omitted fields fall back to the Worker's global configuration.
     """
-    mode = config.delivery_mode
+    settings = options or DeliveryOptions.from_config(config)
+    mode = settings.mode
     if mode == "none" or not origin_cwd:
         return DeliveryResult()
 
@@ -51,15 +75,15 @@ def deliver_artifacts(
     workspace = workspace.resolve()
 
     if mode == "workspace":
-        return _deliver_workspace(workspace, origin, config, ticket_id)
-    return _deliver_artifact_files(workspace, origin, artifacts, config, ticket_id)
+        return _deliver_workspace(workspace, origin, settings, ticket_id)
+    return _deliver_artifact_files(workspace, origin, artifacts, settings, ticket_id)
 
 
 def _deliver_artifact_files(
     workspace: Path,
     origin: Path,
     artifacts: list[Artifact],
-    config: WorkerConfig,
+    settings: DeliveryOptions,
     ticket_id: str,
 ) -> DeliveryResult:
     delivered: list[str] = []
@@ -67,11 +91,11 @@ def _deliver_artifact_files(
     for artifact in artifacts:
         try:
             source, relative = _source_path(workspace, artifact.path)
-            destination_relative = _strip_prefix(relative, config.delivery_strip_prefix)
+            destination_relative = _strip_prefix(relative, settings.strip_prefix)
             if not destination_relative.parts:
                 raise DeliveryPathError("artifact path is empty after stripping its prefix")
             destination = _destination_path(origin, destination_relative)
-            destination = _choose_destination(destination, config.delivery_collision, ticket_id)
+            destination = _choose_destination(destination, settings.collision, ticket_id)
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
             delivered.append(str(destination))
@@ -150,11 +174,11 @@ def _versioned_path(destination: Path, ticket_id: str) -> Path:
 def _deliver_workspace(
     workspace: Path,
     origin: Path,
-    config: WorkerConfig,
+    settings: DeliveryOptions,
     ticket_id: str,
 ) -> DeliveryResult:
-    base = origin / ".super-rlm" / ticket_id
-    destination = _choose_workspace_destination(base, config.delivery_collision)
+    base = origin / settings.workspace_subdir / ticket_id
+    destination = _choose_workspace_destination(base, settings.collision)
     if isinstance(destination, DeliveryResult):
         return destination
     try:

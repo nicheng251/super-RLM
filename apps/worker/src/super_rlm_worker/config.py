@@ -57,6 +57,7 @@ class WorkerConfig:
     delivery_mode: str
     delivery_collision: str
     delivery_strip_prefix: str
+    delivery_workspace_subdir: str
     report_skill: Path
     worker_prompt: Path
     workspace_root: Path
@@ -65,6 +66,7 @@ class WorkerConfig:
     heartbeat_interval_s: float
     start_timeout_s: float
     turn_timeout_s: float
+    metadata_timeout_s: float
     report_token_ttl_s: float
     callback_key: str
     assignment_heartbeat_interval_s: float
@@ -102,6 +104,7 @@ class WorkerConfig:
             delivery_mode=_choice_env(source, "SUPER_RLM_DELIVERY_MODE", "artifacts", {"artifacts", "workspace", "none"}),
             delivery_collision=_choice_env(source, "SUPER_RLM_DELIVERY_COLLISION", "version", {"version", "overwrite", "error"}),
             delivery_strip_prefix=source.get("SUPER_RLM_DELIVERY_STRIP_PREFIX", ""),
+            delivery_workspace_subdir=source.get("SUPER_RLM_DELIVERY_WORKSPACE_SUBDIR", ".super-rlm"),
             report_skill=Path(source.get("SUPER_RLM_REPORT_SKILL", _repo_root() / "apps" / "worker" / "skills" / "super-rlm-report")),
             worker_prompt=Path(source.get("SUPER_RLM_WORKER_PROMPT", _repo_root() / "apps" / "worker" / "prompts" / "worker.md")),
             workspace_root=Path(source.get("SUPER_RLM_WORKSPACES", home / "workspaces")),
@@ -110,6 +113,7 @@ class WorkerConfig:
             heartbeat_interval_s=float(source.get("SUPER_RLM_HEARTBEAT_INTERVAL_S", "10")),
             start_timeout_s=float(source.get("SUPER_RLM_START_TIMEOUT_S", "30")),
             turn_timeout_s=float(source.get("SUPER_RLM_TURN_TIMEOUT_S", "3600")),
+            metadata_timeout_s=float(source.get("SUPER_RLM_METADATA_TIMEOUT_S", "60")),
             report_token_ttl_s=float(source.get("SUPER_RLM_REPORT_TOKEN_TTL_S", "7200")),
             callback_key=source.get("SUPER_RLM_CALLBACK_KEY", "dev-callback-key"),
             assignment_heartbeat_interval_s=float(source.get("SUPER_RLM_ASSIGNMENT_HEARTBEAT_INTERVAL_S", "10")),

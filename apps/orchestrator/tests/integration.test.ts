@@ -180,6 +180,38 @@ test("the per-task cap leaves queued tickets for a later slot", async () => {
   assert.equal(view.tickets.filter((ticket) => ticket.status === "queued").length, 1);
 });
 
+test("completed reports persist generic workspace metadata", async () => {
+  const { orchestrator } = harness();
+  const created = await orchestrator.createTask({
+    prompt: "metadata",
+    tickets: [{ title: "metadata", prompt: "metadata" }],
+  });
+  const ticketId = created.tickets[0].ticket_id;
+  const assignment = orchestrator.store.getActiveAssignment(ticketId);
+  assert.ok(assignment);
+
+  const workspaceMetadata = { vcs: "git", branch: "ticket/output", commit: "0123456789abcdef", files: 2 };
+  await orchestrator.handleReport(report(
+    ticketId, assignment.assignment_id, 1, "completed",
+    {
+      summary: "metadata done",
+      result: "ok",
+      workspace_metadata: workspaceMetadata,
+      metadata_error: "optional metadata warning",
+    },
+  ));
+
+  const result = orchestrator.getTicketResult(ticketId);
+  assert.deepEqual(result.workspace_metadata, workspaceMetadata);
+  assert.equal(result.metadata_error, "optional metadata warning");
+  assert.equal(result.branch, "ticket/output");
+  assert.equal(result.commit, "0123456789abcdef");
+
+  const summary = orchestrator.getTask(created.task_id).tickets[0];
+  assert.deepEqual(summary.workspace_metadata, workspaceMetadata);
+  assert.equal(summary.metadata_error, "optional metadata warning");
+});
+
 test("dropped reports settle the ticket as a no-op success", async () => {
   const { orchestrator } = harness();
   const created = await orchestrator.createTask({

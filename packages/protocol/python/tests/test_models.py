@@ -133,6 +133,58 @@ def test_execution_request_origin_cwd_defaults_to_none():
     assert explicit.origin_cwd == "/tmp/user/launch"
 
 
+def test_execution_options_defaults_and_profile_summary():
+    options = m.ExecutionOptions.model_validate({"provider": "deepseek", "model": "deepseek-flash"})
+    assert options.thinking == "medium"
+    assert options.timeout_s == 3600
+    assert options.prepare_command is None
+    assert options.blocked_commands == []
+    assert options.workspace.agent_cwd == "."
+    assert options.workspace.artifact_root == "."
+    assert options.workspace.metadata_command is None
+    assert options.delivery.mode == "artifacts"
+    assert options.delivery.collision == "version"
+
+    request = m.ExecutionRequest.model_validate({
+        "ticket_id": "tkt_1",
+        "assignment_id": "asg_1",
+        "prompt": "do it",
+        "workspace": "/tmp/workspaces/tkt_1",
+        "execution": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "thinking": "high",
+            "timeout_s": 60,
+            "prepare_command": "prepare",
+            "blocked_commands": ["git"],
+            "workspace": {"agent_cwd": "repo", "artifact_root": ".", "metadata_command": "meta"},
+            "delivery": {"mode": "none", "collision": "error", "strip_prefix": "out"},
+        },
+    })
+    assert request.execution.thinking == "high"
+    assert request.execution.workspace.agent_cwd == "repo"
+    assert request.execution.delivery.mode == "none"
+
+    summary = m.ProfileSummary.model_validate({
+        "name": "default",
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+        "thinking": "medium",
+    })
+    assert summary.description == ""
+
+
+def test_execution_options_reject_bad_values():
+    with pytest.raises(ValidationError):
+        m.ExecutionOptions.model_validate({"provider": "", "model": "m"})
+    with pytest.raises(ValidationError):
+        m.ExecutionOptions.model_validate({"provider": "p", "model": "m", "thinking": "turbo"})
+    with pytest.raises(ValidationError):
+        m.ExecutionOptions.model_validate({"provider": "p", "model": "m", "timeout_s": 0})
+    with pytest.raises(ValidationError):
+        m.DeliveryOptions.model_validate({"mode": "copy"})
+
+
 def test_report_and_ticket_results_default_delivery_fields():
     report = m.WorkerReport.model_validate(make_report())
     assert report.delivered_to == []
@@ -147,6 +199,8 @@ def test_report_and_ticket_results_default_delivery_fields():
     summary = m.TicketSummary.model_validate(make_ticket_summary())
     assert summary.delivered_to == []
     assert summary.delivery_error is None
+    assert summary.workspace_metadata is None
+    assert summary.metadata_error is None
     result = m.TicketResult.model_validate({
         "ticket_id": "tkt_1",
         "status": "succeeded",
@@ -154,3 +208,28 @@ def test_report_and_ticket_results_default_delivery_fields():
     })
     assert result.delivered_to == []
     assert result.delivery_error is None
+    assert result.workspace_metadata is None
+    assert result.metadata_error is None
+
+
+def test_reports_and_ticket_views_carry_workspace_metadata():
+    report = m.WorkerReport.model_validate(make_report(
+        workspace_metadata={"vcs": "git", "branch": "b", "commit": "c"},
+        metadata_error="partial metadata",
+    ))
+    assert report.workspace_metadata == {"vcs": "git", "branch": "b", "commit": "c"}
+    assert report.metadata_error == "partial metadata"
+
+    summary = m.TicketSummary.model_validate(make_ticket_summary(
+        workspace_metadata={"vcs": "none"}, metadata_error="missing git",
+    ))
+    assert summary.workspace_metadata == {"vcs": "none"}
+    assert summary.metadata_error == "missing git"
+
+    result = m.TicketResult.model_validate({
+        "ticket_id": "tkt_1",
+        "status": "succeeded",
+        "workspace_metadata": {"vcs": "git", "branch": "b", "commit": "c"},
+        "metadata_error": None,
+    })
+    assert result.workspace_metadata == {"vcs": "git", "branch": "b", "commit": "c"}

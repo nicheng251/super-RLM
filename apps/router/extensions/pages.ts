@@ -29,6 +29,10 @@ function pad(text: string, width: number): string {
   return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
 }
 
+function formatMetadataValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
 function statusColor(status: string): "success" | "error" | "warning" | "accent" | "dim" {
   if (status === "succeeded") return "success";
   if (status === "failed" || status === "lost") return "error";
@@ -183,6 +187,15 @@ class TaskDetailComponent {
         body.push("");
         body.push(this.theme.fg("accent", ticket.title));
         if (ticket.workspace) body.push(`workspace: ${truncateToWidth(ticket.workspace, Math.max(20, width - 6))}`);
+        if (ticket.workspace_metadata) {
+          body.push("workspace metadata:");
+          for (const [key, value] of Object.entries(ticket.workspace_metadata)) {
+            body.push(`  ${key}: ${truncateToWidth(formatMetadataValue(value), Math.max(20, width - 10))}`);
+          }
+        }
+        if (ticket.metadata_error) {
+          body.push(this.theme.fg("error", `metadata error: ${truncateToWidth(ticket.metadata_error, Math.max(20, width - 6))}`));
+        }
         if (ticket.branch) body.push(`branch: ${ticket.branch}`);
         if (ticket.commit) body.push(`commit: ${ticket.commit}`);
         if (ticket.delivered_to.length > 0) {

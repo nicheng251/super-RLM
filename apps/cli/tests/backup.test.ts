@@ -21,7 +21,7 @@ function writeDatabase(home: string): void {
   const db = new DatabaseSync(path);
   try {
     db.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
-    db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run("schema_version", "3");
+    db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run("schema_version", "4");
   } finally {
     db.close();
   }
@@ -66,7 +66,7 @@ test("backup copies the runtime, excludes secrets and transient files, and recor
   assert.equal(manifest.node_version, process.versions.node);
   const primePackage = JSON.parse(readFileSync(join(config.repoRoot, "runtime", "prime-agent", "package.json"), "utf8"));
   assert.equal(manifest.prime_agent_version, primePackage.version);
-  assert.equal(manifest.schema_version, 3);
+  assert.equal(manifest.schema_version, 4);
   assert.equal(manifest.included_secrets, false);
 
   const paths = manifest.files.map((file: { path: string }) => file.path);
@@ -129,7 +129,7 @@ test("restore refuses a backup from a newer schema and leaves the runtime untouc
 
   const manifestPath = join(backup.backupDir, "manifest.json");
   const manifest = readManifest(backup.backupDir);
-  writeFileSync(manifestPath, JSON.stringify({ ...manifest, schema_version: 4 }, null, 2), "utf8");
+  writeFileSync(manifestPath, JSON.stringify({ ...manifest, schema_version: 5 }, null, 2), "utf8");
 
   const targetHome = join(root, "target");
   mkdirSync(targetHome, { recursive: true });

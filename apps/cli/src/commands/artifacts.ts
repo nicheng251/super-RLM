@@ -5,7 +5,6 @@
  * the artifact list; the local CLI only performs the file copy.
  */
 
-import { execFileSync } from "node:child_process";
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
@@ -16,14 +15,20 @@ export interface ArtifactCopyOptions {
   all?: boolean;
 }
 
+/** Artifact copying only needs the artifact list plus the optional workspace report. */
+export type TicketWorkspaceResult = Pick<TicketResult, "artifacts"> & {
+  workspace_metadata?: Record<string, unknown> | null;
+  metadata_error?: string | null;
+};
+
 export interface ArtifactCopyResult {
   ticket_id: string;
   workspace: string;
   destination: string;
   copied: string[];
   files: number;
-  branch: string | null;
-  commit: string | null;
+  workspace_metadata: Record<string, unknown> | null;
+  metadata_error: string | null;
 }
 
 export interface RunArtifactsOptions {
@@ -33,9 +38,14 @@ export interface RunArtifactsOptions {
 
 const REPORT_CONFIG = ".super-rlm-report.json";
 const PREPARED_MARKER = ".super-rlm-prepared";
+const BLOCKED_BIN = ".super-rlm-bin";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function formatMetadataValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
 }
 
 function uniquePath(base: string): string {
@@ -49,19 +59,6 @@ function uniquePath(base: string): string {
 function isInside(parent: string, candidate: string): boolean {
   const rel = relative(resolve(parent), resolve(candidate));
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
-function gitValue(workspace: string, args: string[]): string | null {
-  try {
-    const value = execFileSync("git", ["-C", workspace, ...args], {
-      encoding: "utf8",
-      timeout: 2_000,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return value || null;
-  } catch {
-    return null;
-  }
 }
 
 function countFiles(root: string): number {
@@ -85,30 +82,20 @@ function workspaceFor(config: CliConfig, ticketId: string): string {
   return workspace;
 }
 
-function gitCheckout(workspace: string): string {
-  const nested = join(workspace, "repo");
-  return existsSync(join(nested, ".git")) ? nested : workspace;
-}
-
-function workspaceDetails(workspace: string): { branch: string | null; commit: string | null } {
-  const checkout = gitCheckout(workspace);
-  return {
-    branch: gitValue(checkout, ["rev-parse", "--abbrev-ref", "HEAD"]),
-    commit: gitValue(checkout, ["rev-parse", "HEAD"]),
-  };
-}
-
 /** Copy the Ticket's reported artifacts, or its whole workspace when `all` is set. */
 export function copyTicketArtifacts(
   config: CliConfig,
   ticketId: string,
-  result: Pick<TicketResult, "artifacts">,
+  result: TicketWorkspaceResult,
   destinationDir: string,
   options: ArtifactCopyOptions = {},
 ): ArtifactCopyResult {
   const workspace = workspaceFor(config, ticketId);
   const destinationRoot = resolve(destinationDir);
-  const details = workspaceDetails(workspace);
+  const details = {
+    workspace_metadata: result.workspace_metadata ?? null,
+    metadata_error: result.metadata_error ?? null,
+  };
 
   if (options.all) {
     if (isInside(workspace, destinationRoot)) {
@@ -120,7 +107,7 @@ export function copyTicketArtifacts(
       recursive: true,
       filter: (source) => {
         const name = basename(source);
-        return name !== REPORT_CONFIG && name !== PREPARED_MARKER && name !== ".git";
+        return name !== REPORT_CONFIG && name !== PREPARED_MARKER && name !== BLOCKED_BIN && name !== ".git";
       },
     });
     return {
@@ -203,8 +190,12 @@ export async function runArtifacts(
     for (const path of copy.copied) console.log(`copied ${path}`);
     console.log(`Ticket ${ticketId}: ${copy.files} file(s)`);
     console.log(`workspace: ${copy.workspace}`);
-    if (copy.branch) console.log(`branch:    ${copy.branch}`);
-    if (copy.commit) console.log(`commit:    ${copy.commit}`);
+    if (copy.workspace_metadata) {
+      for (const [key, value] of Object.entries(copy.workspace_metadata)) {
+        console.log(`metadata.${key}: ${formatMetadataValue(value)}`);
+      }
+    }
+    if (copy.metadata_error) console.log(`metadata error: ${copy.metadata_error}`);
     return 0;
   } catch (error) {
     console.error(errorMessage(error));

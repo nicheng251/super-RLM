@@ -6,10 +6,18 @@ import { loadConfig } from "./config.ts";
 import { Store } from "./db.ts";
 import { acquireLock, type LockHandle } from "./lock.ts";
 import { Orchestrator } from "./orchestrator.ts";
+import { loadProfiles, profileSummaries, type ProfilesConfig } from "./profiles.ts";
 import { createOrchestratorServer, serverAddress } from "./server.ts";
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  let profiles: ProfilesConfig;
+  try {
+    profiles = loadProfiles();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
   mkdirSync(dirname(config.dbPath), { recursive: true });
   mkdirSync(config.workspaceRoot, { recursive: true });
 
@@ -29,6 +37,7 @@ async function main(): Promise<void> {
     workerLeaseMs: config.workerLeaseMs,
     dispatchTimeoutMs: 10_000,
     workspaceRoot: config.workspaceRoot,
+    profiles,
   });
   orchestrator.recover();
   await orchestrator.schedule();
@@ -37,6 +46,7 @@ async function main(): Promise<void> {
     routerToken: config.routerToken,
     workerToken: config.workerToken,
     callbackKey: config.callbackKey,
+    profiles: profileSummaries(profiles),
   });
 
   server.listen(config.port, config.host, () => {
@@ -47,6 +57,7 @@ async function main(): Promise<void> {
       port: address.port,
       db: config.dbPath,
       workspaces: config.workspaceRoot,
+      profiles: profileSummaries(profiles).map((profile) => profile.name),
     }));
   });
 

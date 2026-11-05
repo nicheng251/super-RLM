@@ -39,14 +39,16 @@ Response:
     {
       "name": "default",
       "description": "General-purpose worker",
-      "model": "default",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
       "thinking": "medium"
     },
     {
-      "name": "research",
-      "description": "Long-form research",
-      "model": "research",
-      "thinking": "high"
+      "name": "git",
+      "description": "Ticket running in a dedicated git worktree",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "thinking": "medium"
     }
   ]
 }
@@ -163,6 +165,12 @@ Response:
       },
       "error": null,
       "workspace": "/data/workspaces/tkt_...",
+      "workspace_metadata": {
+        "vcs": "git",
+        "branch": "agent/tkt_...",
+        "commit": "abc123"
+      },
+      "metadata_error": null,
       "branch": "agent/tkt_...",
       "commit": "abc123",
       "delivered_to": ["/home/user/output/out.md"],
@@ -213,6 +221,12 @@ Response:
   "error": null,
   "session_ref": "prime-session-...",
   "workspace": "/data/workspaces/tkt_...",
+  "workspace_metadata": {
+    "vcs": "git",
+    "branch": "agent/tkt_...",
+    "commit": "abc123"
+  },
+  "metadata_error": null,
   "branch": "agent/tkt_...",
   "commit": "abc123",
   "delivered_to": ["/home/user/output/out.md"],
@@ -221,8 +235,9 @@ Response:
 ```
 
 `max_chars` bounds the returned `result`; the full result remains in Orchestrator storage.
-`workspace` is the runtime workspace path. `branch` and `commit` are read from
-the workspace git checkout and are `null` when it is not a git repository.
+`workspace` is the runtime workspace path. `workspace_metadata` is the JSON
+object produced by the profile's optional `metadata_command`; `branch` and
+`commit` are compatibility views when `workspace_metadata.vcs == "git"`.
 `delivered_to` lists files copied to the Task's `origin_cwd`; `delivery_error`
 is non-null when that copy failed.
 

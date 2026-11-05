@@ -10,7 +10,13 @@ from pydantic import BaseModel
 from super_rlm_protocol import ExecutionRequest, ExecutionResponse, ReportAck, SkillReport
 
 from .config import WorkerConfig
-from .executor import AtCapacity, ExecutionManager, ExecutionNotFound, InvalidReportToken
+from .executor import (
+    AtCapacity,
+    ExecutionManager,
+    ExecutionNotFound,
+    InvalidExecution,
+    InvalidReportToken,
+)
 
 
 class CancelRequest(BaseModel):
@@ -37,6 +43,10 @@ def create_app(
     @app.exception_handler(ExecutionNotFound)
     async def _not_found(_request: Request, exc: ExecutionNotFound):
         return JSONResponse(status_code=404, content={"error": {"code": "execution_not_found", "message": str(exc)}})
+
+    @app.exception_handler(InvalidExecution)
+    async def _invalid_execution(_request: Request, exc: InvalidExecution):
+        return JSONResponse(status_code=400, content={"error": {"code": "invalid_execution", "message": str(exc)}})
 
     @app.exception_handler(InvalidReportToken)
     async def _invalid_token(_request: Request, exc: InvalidReportToken):

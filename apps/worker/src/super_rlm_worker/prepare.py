@@ -93,33 +93,20 @@ def shell_invocation(config: WorkerConfig, command: str) -> list[str]:
     return ["sh", "-c", command]
 
 
-async def prepare_workspace(
+async def run_shell(
     config: WorkerConfig,
-    workspace: Path,
-    ticket_id: str,
-    assignment_id: str,
-) -> dict[str, Any] | None:
-    """Run the configured preparation command once per workspace.
-
-    Returns the marker payload when the workspace is prepared (now or before),
-    or ``None`` when no preparation command is configured.
-    """
-    existing = read_marker(workspace)
-    if existing is not None:
-        LOG.info("workspace %s already prepared; skipping", workspace)
-        return existing
-
-    command = config.prepare_command
-    if not command:
-        return None
-
+    command: str,
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    timeout_s: float,
+) -> tuple[int, str]:
+    """Run one shell command to completion and return (exit code, output)."""
     argv = shell_invocation(config, command)
-    env = build_prepare_env(config, workspace, ticket_id, assignment_id)
-    LOG.info("preparing workspace %s: %s", workspace, command)
     try:
         process = await asyncio.create_subprocess_exec(
             *argv,
-            cwd=str(workspace),
+            cwd=str(cwd),
             env=env,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
@@ -127,33 +114,67 @@ async def prepare_workspace(
             **({} if os.name == "nt" else {"start_new_session": True}),
         )
     except OSError as exc:
-        raise PrepareError(f"could not start preparation shell {argv[0]!r}: {exc}") from exc
+        raise PrepareError(f"could not start shell {argv[0]!r}: {exc}") from exc
 
     try:
-        output_bytes, _ = await asyncio.wait_for(
-            process.communicate(), timeout=config.prepare_timeout_s
-        )
+        output_bytes, _ = await asyncio.wait_for(process.communicate(), timeout=timeout_s)
     except asyncio.TimeoutError:
         await _kill(process)
-        raise PrepareError(
-            f"prepare_command timed out after {config.prepare_timeout_s:g}s: {command}"
-        ) from None
+        raise PrepareError(f"command timed out after {timeout_s:g}s: {command}") from None
 
-    output = output_bytes.decode("utf-8", errors="replace").strip()
+    return process.returncode, output_bytes.decode("utf-8", errors="replace").strip()
+
+
+async def prepare_workspace(
+    config: WorkerConfig,
+    workspace: Path,
+    ticket_id: str,
+    assignment_id: str,
+    *,
+    prepare_command: str | None = None,
+    profile: str | None = None,
+) -> dict[str, Any] | None:
+    """Run the configured preparation command once per workspace.
+
+    ``prepare_command`` is the per-Assignment profile override; when omitted the
+    Worker's global ``SUPER_RLM_PREPARE_COMMAND`` is used. Returns the marker
+    payload when the workspace is prepared (now or before), or ``None`` when no
+    preparation command is configured.
+    """
+    existing = read_marker(workspace)
+    if existing is not None:
+        LOG.info("workspace %s already prepared; skipping", workspace)
+        return existing
+
+    command = prepare_command if prepare_command is not None else config.prepare_command
+    if not command:
+        return None
+
+    env = build_prepare_env(config, workspace, ticket_id, assignment_id)
+    LOG.info("preparing workspace %s: %s", workspace, command)
+    returncode, output = await run_shell(
+        config,
+        command,
+        cwd=workspace,
+        env=env,
+        timeout_s=config.prepare_timeout_s,
+    )
     if output:
         LOG.info("prepare output for %s:\n%s", workspace, output[-4000:])
-    if process.returncode != 0:
+    if returncode != 0:
         tail = output[-2000:]
-        message = f"prepare_command exited with code {process.returncode}"
+        message = f"prepare_command exited with code {returncode}"
         if tail:
             message = f"{message}: {tail}"
         raise PrepareError(message)
 
-    payload = {
+    payload: dict[str, Any] = {
         "ticket_id": ticket_id,
         "prepared_at": datetime.now(timezone.utc).isoformat(),
         "command": command,
     }
+    if profile:
+        payload["profile"] = profile
     marker_path(workspace).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
 

@@ -18,7 +18,7 @@ import type {
 
 type Row = Record<string, unknown>;
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS tickets (
   resume_message TEXT,
   delivered_to TEXT NOT NULL DEFAULT '[]',
   delivery_error TEXT,
+  workspace_metadata TEXT,
+  metadata_error TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -183,6 +185,11 @@ export class Store {
       this.ensureColumn("tickets", "delivery_error", "TEXT");
       return;
     }
+    if (version === 4) {
+      this.ensureColumn("tickets", "workspace_metadata", "TEXT");
+      this.ensureColumn("tickets", "metadata_error", "TEXT");
+      return;
+    }
     // Version 1 is the base schema above.
   }
 
@@ -224,8 +231,9 @@ export class Store {
         INSERT INTO tickets (
           ticket_id, task_id, title, prompt, profile, status, summary, result, artifacts, usage,
           error, question, session_key, session_ref, outcome, no_op, retry_count, not_before,
-          priority_next, resume_message, delivered_to, delivery_error, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          priority_next, resume_message, delivered_to, delivery_error, workspace_metadata,
+          metadata_error, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       for (const ticket of tickets) {
         insertTicket.run(
@@ -238,6 +246,8 @@ export class Store {
           ticket.no_op === null ? null : ticket.no_op ? 1 : 0,
           ticket.retry_count, ticket.not_before, ticket.priority_next ? 1 : 0, ticket.resume_message,
           JSON.stringify(ticket.delivered_to), ticket.delivery_error,
+          ticket.workspace_metadata === null ? null : JSON.stringify(ticket.workspace_metadata),
+          ticket.metadata_error,
           ticket.created_at, ticket.updated_at,
         );
       }
@@ -279,7 +289,7 @@ export class Store {
   updateTicket(ticketId: string, patch: Partial<TicketRecord>): void {
     const fields: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(patch)) {
-      if (key === "artifacts" || key === "usage" || key === "error" || key === "question" || key === "delivered_to") {
+      if (key === "artifacts" || key === "usage" || key === "error" || key === "question" || key === "delivered_to" || key === "workspace_metadata") {
         fields[key] = value === null ? null : JSON.stringify(value);
       } else if (key === "no_op") {
         fields[key] = value === null ? null : value ? 1 : 0;
@@ -534,6 +544,8 @@ function ticketFromRow(row: Row): TicketRecord {
     resume_message: row.resume_message === null ? null : String(row.resume_message),
     delivered_to: parseJson(row.delivered_to, []),
     delivery_error: row.delivery_error === null ? null : String(row.delivery_error),
+    workspace_metadata: row.workspace_metadata === null ? null : parseJson(row.workspace_metadata, null),
+    metadata_error: row.metadata_error === null ? null : String(row.metadata_error),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   };

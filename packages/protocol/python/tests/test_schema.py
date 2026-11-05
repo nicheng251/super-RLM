@@ -114,6 +114,54 @@ def test_skill_report_schema_requires_question_for_blocked():
         "question": {"kind": "blocked", "text": "Configure the token."},
     })
 
+def test_schema_exposes_execution_options_and_profiles():
+    execution = SCHEMA["$defs"]["ExecutionRequest"]["properties"]
+    assert "execution" in execution
+    options = SCHEMA["$defs"]["ExecutionOptions"]["properties"]
+    for name in ["provider", "model", "thinking", "timeout_s", "prepare_command",
+                 "blocked_commands", "workspace", "delivery"]:
+        assert name in options
+    workspace = SCHEMA["$defs"]["WorkspaceOptions"]["properties"]
+    assert {"agent_cwd", "artifact_root", "metadata_command"} <= set(workspace)
+    delivery = SCHEMA["$defs"]["DeliveryOptions"]["properties"]
+    assert {"mode", "collision", "strip_prefix", "workspace_subdir"} <= set(delivery)
+    summary = SCHEMA["$defs"]["ProfileSummary"]["properties"]
+    assert {"name", "description", "provider", "model", "thinking"} <= set(summary)
+
+    payload = {
+        "ticket_id": "tkt_1",
+        "assignment_id": "asg_1",
+        "prompt": "do it",
+        "workspace": "/tmp/workspaces/tkt_1",
+        "execution": {
+            "provider": "deepseek",
+            "model": "deepseek-flash",
+            "thinking": "medium",
+            "timeout_s": 60,
+            "workspace": {"agent_cwd": "repo", "artifact_root": "."},
+            "delivery": {"mode": "none", "collision": "version"},
+        },
+    }
+    validator("ExecutionRequest").validate(payload)
+
+
+def test_schema_exposes_workspace_metadata_fields():
+    for name in ["WorkerReport", "TicketSummary", "TicketResult"]:
+        properties = SCHEMA["$defs"][name]["properties"]
+        assert "workspace_metadata" in properties
+        assert "metadata_error" in properties
+    validator("WorkerReport").validate(report_payload(
+        workspace_metadata={"vcs": "git", "branch": "b", "commit": "c"},
+        metadata_error="partial metadata",
+    ))
+    validator("TicketResult").validate({
+        "ticket_id": "tkt_1",
+        "status": "succeeded",
+        "workspace_metadata": {"vcs": "none"},
+        "metadata_error": None,
+    })
+
+
 def test_schema_exposes_delivery_fields():
     report_schema = SCHEMA["$defs"]["WorkerReport"]["properties"]
     assert "delivered_to" in report_schema
