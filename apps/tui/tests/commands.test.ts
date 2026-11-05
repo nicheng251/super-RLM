@@ -1,18 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseSlashCommand, viewForCommand } from "../src/commands.ts";
+import { parseSlashCommand } from "../src/commands.ts";
 
-test("parses view commands", () => {
-  assert.deepEqual(parseSlashCommand("/tasks"), { name: "tasks" });
-  assert.deepEqual(parseSlashCommand("/workers"), { name: "workers" });
-  assert.equal(viewForCommand(parseSlashCommand("/events")!), "events");
-});
-
-test("parses detail with an optional task id", () => {
-  assert.deepEqual(parseSlashCommand("/detail"), { name: "detail", taskId: undefined });
-  assert.deepEqual(parseSlashCommand("/detail tsk_123"), { name: "detail", taskId: "tsk_123" });
-  assert.deepEqual(parseSlashCommand("/task tsk_456"), { name: "detail", taskId: "tsk_456" });
+test("view commands are not a second switching method", () => {
+  assert.deepEqual(parseSlashCommand("/tasks"), { name: "unknown", raw: "/tasks" });
+  assert.deepEqual(parseSlashCommand("/workers"), { name: "unknown", raw: "/workers" });
+  assert.deepEqual(parseSlashCommand("/events"), { name: "unknown", raw: "/events" });
+  assert.deepEqual(parseSlashCommand("/detail"), { name: "unknown", raw: "/detail" });
 });
 
 test("parses task filter, search, and clear commands", () => {

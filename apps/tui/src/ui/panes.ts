@@ -71,7 +71,7 @@ export class SidebarPane implements Component {
       const label = `${marker} ${VIEW_LABELS[view]}${suffix}`;
       rows.push(selected ? inverse(truncateToWidth(label, safe)) : truncateToWidth(label, safe));
     }
-    rows.push("", gray("Ctrl+1-5: view"), gray("^C: exit"));
+    rows.push("", gray("Alt+1-5: view"), gray("^C: exit"));
     return rows.map((row) => truncateToWidth(row, safe));
   }
 

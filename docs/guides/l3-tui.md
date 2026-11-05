@@ -70,11 +70,8 @@ on the left; the view sidebar is on the right.
 ## Keys
 
 ```text
-Ctrl+1..5     switch Chat/Tasks/Detail/Workers/Events
-Alt+1..5      fallback when the terminal reports Alt+digit
-F1..F5        reliable fallback view switch
-Ctrl+K, 1..5  leader fallback
-/             command mode (or type /command in Chat)
+Alt+1..5      switch Chat/Tasks/Detail/Workers/Events
+/             command mode (type /command in Chat)
 Ctrl+C        exit
 Esc           back / abort Chat turn
 j / k         move
@@ -87,20 +84,13 @@ q             back to Tasks
 r             refresh
 ```
 
-Ctrl+digit is recognized from Kitty, xterm modifyOtherKeys, and common
-modified-key encodings. Some terminals do not report Ctrl+digit at all; in that
-case the input arrives as a plain digit and cannot be distinguished from typing.
-Use F1..F5, Alt+1..5, Ctrl+K then 1..5, or the slash commands (`/tasks`,
-`/workers`, etc.). The Chat editor autocompletes commands after `/`.
+**Alt+1..5 is the only view-switching shortcut.** Ctrl+digit, F-keys, Tab,
+sidebar digits, and slash commands are not view-switching methods. The Chat
+editor autocompletes non-view slash commands after `/`.
 
 Slash commands:
 
 ```text
-/chat
-/tasks
-/detail [task_id]
-/workers
-/events
 /filter [all|waiting|running|terminal]
 /search <text>
 /clear
@@ -110,6 +100,8 @@ Slash commands:
 /quit
 /help
 ```
+
+View switching is `Alt+1..5` only.
 
 `f` cycles the Tasks filter. `waiting` includes tasks with waiting/blocked
 counts; `running` includes tasks with running tickets; `terminal` includes

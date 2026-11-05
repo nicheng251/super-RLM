@@ -16,7 +16,7 @@ import { TaskDetailPageModel, TasksPageModel } from "../../router/src/page-model
 import type { TaskListItem, TicketSummary } from "../../../packages/protocol/ts/index.ts";
 import { TuiApi } from "./api.ts";
 import { OrchestratorEventStream } from "./event-stream.ts";
-import { COMMAND_HELP, COMMANDS, parseSlashCommand, viewForCommand } from "./commands.ts";
+import { COMMAND_HELP, COMMANDS, parseSlashCommand } from "./commands.ts";
 import { mapKey, type Action, type FocusArea } from "./keymap.ts";
 import {
   addEvent,
@@ -45,11 +45,11 @@ import {
 import { bold, cyan, dim, gray, green, red, yellow } from "./ui/theme.ts";
 
 const FOOTER_HELP: Record<ViewName, string> = {
-  chat: "Enter send/steer \u00b7 / commands \u00b7 ^K then 1-5 or F1-F5 views \u00b7 ^C exit",
-  tasks: "j/k select \u00b7 Enter detail \u00b7 f filter \u00b7 r refresh \u00b7 Esc chat",
-  detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 q back \u00b7 r refresh",
-  workers: "j/k scroll \u00b7 r refresh \u00b7 Esc chat",
-  events: "j/k scroll \u00b7 r refresh \u00b7 Esc chat",
+  chat: "Enter send/steer \u00b7 / commands \u00b7 Alt+1..5 views \u00b7 ^C exit",
+  tasks: "j/k select \u00b7 Enter detail \u00b7 f filter \u00b7 r refresh \u00b7 Alt+1 chat",
+  detail: "j/k ticket \u00b7 a answer \u00b7 s resume \u00b7 t retry \u00b7 c cancel \u00b7 r refresh \u00b7 Alt+2 tasks",
+  workers: "j/k scroll \u00b7 r refresh \u00b7 Alt+1 chat",
+  events: "j/k scroll \u00b7 r refresh \u00b7 Alt+1 chat",
 };
 
 const EDITOR_THEME: EditorTheme = {
@@ -81,7 +81,6 @@ export class TuiApp {
 
   private readonly chatLines: ChatLine[] = [];
   private focus: FocusArea = "editor";
-  private leader = false;
   private mainScroll: ScrollView | null = null;
   private stream: OrchestratorEventStream | null = null;
   private rpc: RpcClient | null = null;
@@ -163,17 +162,6 @@ export class TuiApp {
   }
 
   private handleGlobalInput(data: string): { consume?: boolean } | undefined {
-    if (this.leader) {
-      this.leader = false;
-      if (data === "\x1b") {
-        this.flash("view switch cancelled");
-        return { consume: true };
-      }
-      const view = ({ "1": "chat", "2": "tasks", "3": "detail", "4": "workers", "5": "events" } as const)[data as "1"];
-      if (view) this.openView(view);
-      else this.flash("View: 1 Chat · 2 Tasks · 3 Detail · 4 Workers · 5 Events");
-      return { consume: true };
-    }
     const action = mapKey(data, { view: this.state.view, focus: this.focus, piRunning: this.piRunning });
     if (!action) return undefined;
     void this.runAction(action);
@@ -187,9 +175,6 @@ export class TuiApp {
         return;
       case "view":
         this.openView(action.view);
-        return;
-      case "focus":
-        this.setFocus(action.area);
         return;
       case "move":
         if (this.state.view === "tasks") this.moveTask(action.delta);
@@ -232,24 +217,20 @@ export class TuiApp {
       case "cycle-filter":
         this.applyTaskFilter(nextTaskFilter(this.state.filter));
         return;
-      case "back":
-        this.openView("tasks");
-        return;
       case "abort":
         await this.abortTurn();
         return;
       case "command":
         this.openCommandMode();
         return;
-      case "leader":
-        this.leader = true;
-        this.flash("View: 1 Chat · 2 Tasks · 3 Detail · 4 Workers · 5 Events");
-        return;
     }
   }
 
   private openCommandMode(): void {
-    this.openView("chat");
+    if (this.state.view !== "chat") {
+      this.flash("Alt+1 opens Chat; slash commands are entered there.");
+      return;
+    }
     this.editor.setText("/");
     this.setFocus("editor");
     this.flash("Command mode: type /help for commands");
@@ -267,16 +248,7 @@ export class TuiApp {
       for (const line of COMMAND_HELP) this.pushChat({ kind: "system", text: `  ${line}` });
       return;
     }
-    const view = viewForCommand(command);
-    if (view) {
-      this.openView(view);
-      return;
-    }
     switch (command.name) {
-      case "detail":
-        if (command.taskId) this.openDetail(command.taskId);
-        else this.openView("detail");
-        return;
       case "filter":
         this.applyTaskFilter(command.filter ?? nextTaskFilter(this.state.filter));
         return;
@@ -327,7 +299,7 @@ export class TuiApp {
   }
 
   private setFocus(area: FocusArea): void {
-    this.focus = area === "sidebar" ? "main" : area;
+    this.focus = area;
     if (this.focus === "editor") {
       this.tui.setFocus(this.editor);
     } else {
@@ -387,7 +359,7 @@ export class TuiApp {
   private sidebarModel(): SidebarModel {
     return {
       current: this.state.view,
-      focused: this.focus === "sidebar",
+      focused: false,
       tasksWaiting: waitingTaskCount(this.tasksModel.state.tasks),
       detailWaiting: this.detailModel?.state.task?.tickets.some((ticket) => ticket.status === "waiting") ?? false,
       workers: this.state.workers.length,
@@ -479,7 +451,9 @@ export class TuiApp {
       this.renderTasks();
       this.updateFooter();
     } else {
-      this.openView("tasks");
+      this.flash(`${message}; Alt+2 opens Tasks`);
+      this.tui.requestRender();
+      return;
     }
     this.flash(message);
     this.tui.requestRender();
@@ -584,7 +558,7 @@ export class TuiApp {
       await client.start();
       this.state.health.pi = "idle";
       this.pushChat({ kind: "system", text: "Pi Router ready." });
-      this.pushChat({ kind: "system", text: "Views: Ctrl+1..5 when reported, F1..F5, Ctrl+K then 1..5, or /commands." });
+      this.pushChat({ kind: "system", text: "View switching: Alt+1..5 only." });
     } catch (error) {
       this.state.health.pi = "error";
       this.pushChat({ kind: "error", text: `Pi failed to start: ${messageOf(error)}` });

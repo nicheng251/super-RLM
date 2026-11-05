@@ -37,9 +37,9 @@ right, and the Chat editor spanning the full terminal width at the bottom.
   absent).
 - **Events** - SSE `GET /v1/events?after=<cursor>` with reconnect and backoff.
 
-Ctrl+1..5 jump to a view. F1..F5, Alt+1..5, and Ctrl+K followed by 1..5 are
-fallbacks for terminals that do not report Ctrl+digit. Ctrl+C exits. The Chat
-editor autocompletes slash commands.
+Alt+1..5 is the only view-switching shortcut. Ctrl+digit, F-keys, Tab, and
+sidebar navigation are not used for view switching. Ctrl+C exits. The Chat
+editor autocompletes non-view slash commands.
 
 ## Notes
 
@@ -58,11 +58,6 @@ Type a slash command in the Chat editor, or press `/` from another view to open
 command mode:
 
 ```text
-/chat
-/tasks
-/detail [task_id]
-/workers
-/events
 /filter [name]
 /search <text>
 /clear
