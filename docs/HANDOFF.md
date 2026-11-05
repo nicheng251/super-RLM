@@ -1,6 +1,6 @@
 # super-RLM Handoff
 
-Status: core vertical slice, CLI, L2 TUI, capability-routed profiles, generic workspaces, per-profile delivery, migration backup, callback outbox, backup/restore, artifact copy-out, and real-model regression all work. HEAD 以 `git log` 为准。
+Status: core vertical slice, CLI, L2 + L3 TUI vertical slice, capability-routed profiles, generic workspaces, per-profile delivery, migration backup, callback outbox, backup/restore, artifact copy-out, and real-model regression all work. HEAD 以 `git log` 为准。
 Last updated: 2026-11-05
 
 ## 1. 项目一句话
@@ -25,10 +25,10 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
   - `docs/spikes/pi-router.md`：Router 现在暴露 11 个控制面工具 + SSE 通知；伪 `bash` 调用被拒绝。
   - `docs/spikes/prime-acp.md`：ACP 驱动成功；`rlm.spawn` 两个子 Agent；report skill 的 `completed` / `waiting` 和 enforcement prompt 均验证。
 - `packages/protocol` 已建立：34 个 JSON Schema `$defs`、Python pydantic 模型、TypeScript 类型；24 个 Python 测试通过，`tsc --noEmit` 通过。
-- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v5，迁移前自动备份）；43 个 `node:test` 测试通过。
+- `apps/orchestrator` 最小实现已完成：状态机、SQLite、slot、HTTP API、Worker dispatch、SSE、单实例锁、启动恢复、forward-only migration（v1->v5，迁移前自动备份）；44 个 `node:test` 测试通过。
 - `apps/worker` 最小实现已完成：FastAPI、ACP、report skill、session_ref、resume、worker/assignment heartbeat、HMAC report；47 个 pytest 通过（含真实 Prime Agent ACP 集成测试、profiles、workspace prepare、blocked commands 和 delivery 测试）。
-- `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles` 可用；27 个 `node:test` 通过；`up/status/down` 已手动验证。
-- 当前单元/集成测试合计 143 个：protocol 24、orchestrator 43、worker 47、cli 27、router 2。
+- `apps/cli` 已实现：`super-rlm` 一键确保 Orchestrator/Worker 后拉起 Router；`up/down/status` 管理后台服务；`dev/tasks/doctor/init/config/bootstrap/models sync/backup/restore/artifacts/profiles/tui` 可用；30 个 `node:test` 通过；`up/status/down` 已手动验证。
+- 当前单元/集成测试合计 159 个：protocol 26、orchestrator 44、worker 47、cli 30、router 2、tui 10。
 - 已手动跑通 Orchestrator -> Worker -> Prime Agent -> `super-rlm-report` -> Orchestrator：Task `succeeded`，`session_ref` 回写。
 - 已手动跑通完整 HITL：`waiting` -> answer -> `--resume` -> `completed`，`session_ref` 保持同一个文件。
 - 已用真实 DeepSeek `deepseek-flash` 跑通：写文件任务成功（`hello.txt` 内容正确），以及 TUI 中 `/tasks` -> Task Detail -> 回答 -> resume -> succeeded。
@@ -45,17 +45,20 @@ super-RLM 是一个本地优先、Pi Agent 驱动的元代理系统：
 - 已实现迁移前自动备份：旧 schema 打开时先 `VACUUM INTO` 备份到 `<home>/orchestrator/backups/`，备份成功后才迁移；失败则拒绝启动。
 - 已实现 durable outbox + 用户 callback HMAC：重要事件入 outbox，后台投递，HMAC-SHA256(timestamp+nonce+body)，失败按 2/5/15/60/300 秒重试，8 次后标记 failed。
 - 已用本地 callback receiver 验证 v4->v5 自动备份、outbox 投递和签名校验（`docs/spikes/callback-outbox-e2e.md`）。
+- 已实现 L3 TUI 垂直切片：`apps/tui` 使用 `@earendil-works/pi-tui` + Pi RpcClient，包含 Chat、Tasks、Task Detail、Workers、Events；CLI 新增 `super-rlm tui`。
+- 已新增 `GET /v1/workers` 和 WorkerView 协议，TUI Workers 页可用。
+- L3 目前是垂直切片：RPC 启动/handshake 已 smoke 测试，真实 DeepSeek Chat E2E 仍待补。
 - 已实现 `super-rlm artifacts <ticket_id>`：从 Ticket workspace 复制 artifacts 或整个 workspace；workspace/branch/commit 已写入 Ticket result 和 TUI Task Detail。
 - 默认 provider/model 从 `config/models.yaml` 的 `default` 读取，环境变量仍优先；`models sync` 只把 `providers` 写入 Pi/Prime models.json。
 - 已用真实 DeepSeek 跑通 prepare + git worktree + artifacts copy-out：Task `tsk_19178d670a9f41759178` succeeded，workspace branch/commit 正确，artifact 复制成功（`docs/spikes/prepare-artifacts-e2e.md`）。
 - 发现并修复 resident kernel 环境过期问题：Worker 在每个 workspace 写 `.super-rlm-report.json`，skill 通过 `SUPER_RLM_REPORT_CONFIG` 每次读取当前 assignment 的 report URL/token。
-- 下一阶段是 Worker 容器隔离（暂时搁置）、L3 TUI、安装器/CI、可观测性；发行、打包暂不做。
+- 下一阶段是 L3 Chat 真实 E2E/体验打磨、安装器/CI、可观测性；Worker 隔离暂时搁置，发行/打包暂不做。
 
 当前实现缺口：
 
 - Orchestrator 已有 outbox 和用户 callback HMAC；callback URL 仍是可信配置，公网 callback 还需要 SSRF/allowlist。
 - Worker 已有 per-profile prepare/blocked/model/thinking/agent_cwd/metadata/delivery；`read_only` 目前是策略元数据，尚未做文件系统写保护。
-- 还缺 per-Worker control token、容器隔离。
+- 还缺 per-Worker control token、容器隔离；L3 的 Chat 真实 E2E 和快捷键兼容性还需补。
 - 报告 skill 依赖 per-workspace 配置文件；这是 resident kernel 的必要 workaround。
 - HMAC report 和 assignment heartbeat 已端到端验证：Worker 日志显示 assignment heartbeat 200、report 200、Task succeeded。
 - Router SSE 通知已在 `--mode rpc` 下验证：`ticket.waiting` 事件成功触发 `pi.sendMessage` 和新的 turn。
@@ -81,6 +84,8 @@ apps/worker/src/super_rlm_worker/metadata.py # metadata_command
 config/profiles.yaml                        # default / git profiles
 apps/orchestrator/src/profiles.ts           # profile loader/validation
 apps/orchestrator/src/outbox.ts              # callback dispatcher
+apps/tui/                                    # L3 独立 TUI shell
+apps/cli/src/commands/tui.ts                 # super-rlm tui
 apps/orchestrator/src/db.ts                  # schema v5 + migration backup + outbox store
 packages/protocol/                          # v0 JSON Schema + Python/TS types
 spikes/                                     # fake LLM、mock Orchestrator、ACP probes
@@ -134,6 +139,7 @@ remote: https://github.com/nicheng251/super-RLM.git
 19. `docs/spikes/delivery-e2e.md`（结果交付 E2E）
 20. `docs/spikes/profiles-e2e.md`（profiles / generic workspace / per-profile delivery E2E）
 21. `docs/spikes/callback-outbox-e2e.md`（callback outbox + migration backup E2E）
+22. `docs/guides/l3-tui.md`（L3 TUI 使用和架构）
 
 ## 4. 架构总览
 
@@ -258,7 +264,7 @@ Prime Agent RLM
   - Task Detail
 - L2 轮询；L3 用 SSE。
 - 共享 `PageModel` + `OrchestratorClient`；L2/L3 只做渲染适配。
-- Phase 2（L3）：一级 TUI shell，实现方式待定（自建 shell / fork Pi / 上游 API）。
+- Phase 2（L3）：独立 `apps/tui` shell 已实现垂直切片（pi-tui + Pi RpcClient，Chat/Tasks/Detail/Workers/Events）；后续继续打磨和真实 Chat E2E。
 - Router 通知：SSE + Pi `sendMessage`，cursor/dedupe/节流；只唤醒 waiting/blocked 和 Task 终态。
 
 ## 6. 关键不变量

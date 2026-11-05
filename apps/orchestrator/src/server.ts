@@ -97,6 +97,10 @@ async function routeRouter(
     return sendJson(res, 200, { profiles });
   }
 
+  if (method === "GET" && url.pathname === "/v1/workers") {
+    return sendJson(res, 200, { workers: orchestrator.listWorkers() });
+  }
+
   if (method === "POST" && url.pathname === "/v1/tasks") {
     const body = await readJson(req, bodyLimit) as Record<string, unknown>;
     const created = await orchestrator.createTask(body as never);

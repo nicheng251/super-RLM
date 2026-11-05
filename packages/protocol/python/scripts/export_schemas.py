@@ -43,6 +43,7 @@ MODELS = [
     m.ExecutionResponse,
     m.WorkerRegistration,
     m.WorkerHeartbeat,
+    m.WorkerView,
     m.AssignmentHeartbeat,
     m.WorkerReport,
     m.ReportAck,

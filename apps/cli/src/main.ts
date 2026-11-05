@@ -10,6 +10,7 @@ import { syncModels } from "./commands/models.ts";
 import { runProfiles } from "./commands/profiles.ts";
 import { runRouter } from "./commands/router.ts";
 import { runTasks } from "./commands/tasks.ts";
+import { runTui } from "./commands/tui.ts";
 import { ensureAllServices, serviceState, stopAllServices } from "./services.ts";
 
 function help(): void {
@@ -29,6 +30,7 @@ Usage:
   super-rlm restore <backup-dir>
                                  Restore an offline backup
   super-rlm tasks [--json] [--limit <n>]
+  super-rlm tui                  Launch the L3 terminal UI
   super-rlm doctor [--json]
   super-rlm init                 Create .super-rlm-project.json
   super-rlm bootstrap [--dry-run]  Prepare the project kernel venv and report skill
@@ -168,6 +170,9 @@ async function main(): Promise<number> {
     const limitIndex = rest.indexOf("--limit");
     const limit = limitIndex >= 0 && rest[limitIndex + 1] ? Number(rest[limitIndex + 1]) : undefined;
     return runTasks(loadConfig(), { json, limit });
+  }
+  if (command === "tui") {
+    return runTui(loadConfig());
   }
   if (command === "doctor") {
     return runDoctor(loadConfig(), { json: rest.includes("--json") });

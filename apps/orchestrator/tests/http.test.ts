@@ -179,3 +179,34 @@ test("HTTP answer resumes a waiting ticket with a priority assignment", async ()
     store.close();
   }
 });
+
+test("HTTP workers route lists registered workers for the router", async () => {
+  const { base, server } = await harness();
+  try {
+    const unauthorized = await fetch(`${base}/v1/workers`);
+    assert.equal(unauthorized.status, 401);
+
+    const registration = await post(base, "/internal/v1/workers/register", "worker-token", {
+      worker_id: "wrk_listed", url: "http://worker-one", max_concurrency: 3, version: "1.2.3",
+    });
+    assert.equal(registration.status, 201);
+
+    const response = await fetch(`${base}/v1/workers`, {
+      headers: { authorization: "Bearer router-token" },
+    });
+    assert.equal(response.status, 200);
+    const body = await response.json() as { workers: Array<Record<string, unknown>> };
+    assert.equal(body.workers.length, 1);
+    const worker = body.workers[0];
+    assert.equal(worker.worker_id, "wrk_listed");
+    assert.equal(worker.url, "http://worker-one");
+    assert.equal(worker.status, "healthy");
+    assert.equal(worker.running, 0);
+    assert.equal(worker.max_concurrency, 3);
+    assert.equal(worker.version, "1.2.3");
+    assert.equal(typeof worker.last_heartbeat, "string");
+    assert.ok(!Number.isNaN(Date.parse(String(worker.last_heartbeat))));
+  } finally {
+    server.close();
+  }
+});

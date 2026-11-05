@@ -252,3 +252,38 @@ def test_reports_and_ticket_views_carry_workspace_metadata():
         "metadata_error": None,
     })
     assert result.workspace_metadata == {"vcs": "git", "branch": "b", "commit": "c"}
+
+
+def test_worker_view_accepts_a_registered_worker():
+    view = m.WorkerView.model_validate({
+        "worker_id": "wrk_1",
+        "url": "http://127.0.0.1:8080",
+        "status": "healthy",
+        "running": 2,
+        "max_concurrency": 4,
+        "last_heartbeat": "2026-11-05T00:00:00Z",
+        "version": "0.1.0",
+    })
+    assert view.worker_id == "wrk_1"
+    assert view.status == "healthy"
+    assert view.version == "0.1.0"
+
+    without_version = m.WorkerView.model_validate({
+        "worker_id": "wrk_2",
+        "url": "http://127.0.0.1:8081",
+        "status": "lost",
+        "running": 0,
+        "max_concurrency": 1,
+        "last_heartbeat": "2026-11-05T00:00:00Z",
+    })
+    assert without_version.version is None
+
+    with pytest.raises(ValidationError):
+        m.WorkerView.model_validate({
+            "worker_id": "wrk_1",
+            "url": "http://127.0.0.1:8080",
+            "status": "healthy",
+            "running": -1,
+            "max_concurrency": 4,
+            "last_heartbeat": "2026-11-05T00:00:00Z",
+        })

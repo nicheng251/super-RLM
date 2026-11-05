@@ -2218,6 +2218,68 @@
         }
       ]
     },
+    "WorkerView": {
+      "additionalProperties": false,
+      "properties": {
+        "worker_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Worker Id",
+          "type": "string"
+        },
+        "url": {
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "healthy",
+            "draining",
+            "lost"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "running": {
+          "minimum": 0,
+          "title": "Running",
+          "type": "integer"
+        },
+        "max_concurrency": {
+          "minimum": 1,
+          "title": "Max Concurrency",
+          "type": "integer"
+        },
+        "last_heartbeat": {
+          "format": "date-time",
+          "title": "Last Heartbeat",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "worker_id",
+        "url",
+        "status",
+        "running",
+        "max_concurrency",
+        "last_heartbeat"
+      ],
+      "title": "WorkerView",
+      "type": "object"
+    },
     "WorkspaceOptions": {
       "additionalProperties": false,
       "properties": {

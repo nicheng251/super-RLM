@@ -401,6 +401,18 @@ class WorkerHeartbeat(BaseModel):
     status: Literal["healthy", "draining"] = "healthy"
 
 
+class WorkerView(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    worker_id: Id
+    url: str = Field(min_length=1)
+    status: Literal["healthy", "draining", "lost"]
+    running: int = Field(ge=0)
+    max_concurrency: int = Field(ge=1)
+    last_heartbeat: datetime
+    version: str | None = None
+
+
 class AssignmentHeartbeat(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

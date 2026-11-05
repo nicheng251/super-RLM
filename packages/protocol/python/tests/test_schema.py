@@ -39,7 +39,7 @@ def report_payload(**overrides):
 def test_schema_has_core_definitions():
     for name in [
         "TaskView", "TicketResult", "WorkerReport", "ExecutionRequest",
-        "Event", "TaskCreateRequest", "SkillReport",
+        "Event", "TaskCreateRequest", "SkillReport", "WorkerView",
     ]:
         assert name in SCHEMA["$defs"]
 
@@ -187,3 +187,15 @@ def test_schema_exposes_delivery_fields():
     validator("WorkerReport").validate(report_payload(
         delivered_to=["/tmp/user/launch/out.txt"], delivery_error="skipped",
     ))
+
+
+def test_worker_view_schema_accepts_worker_fields():
+    validator("WorkerView").validate({
+        "worker_id": "wrk_1",
+        "url": "http://127.0.0.1:8080",
+        "status": "healthy",
+        "running": 1,
+        "max_concurrency": 2,
+        "last_heartbeat": "2026-11-05T00:00:00Z",
+        "version": "0.1.0",
+    })

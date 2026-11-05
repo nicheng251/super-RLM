@@ -1,0 +1,43 @@
+# super-RLM TUI (L3)
+
+Standalone alternate-screen terminal app for the L3 shell. It drives the existing
+Pi Router through `RpcClient` and reads task/worker/event state from the
+Orchestrator. It does not call a model directly.
+
+Run:
+
+```sh
+npm install
+npm run dev
+```
+
+or, once services are up:
+
+```sh
+super-rlm tui
+```
+
+## Views
+
+- **Chat** - Pi Router session over RPC. Enter sends; while a turn runs, Enter
+  steers it. Esc aborts a running turn.
+- **Tasks** - `OrchestratorClient.listTasks`; j/k select, Enter opens the detail.
+- **Task Detail** - tickets with profile, summary, question, error, workspace,
+  branch, commit, and delivery fields. `a` answers a waiting ticket, `t` retries,
+  `c` cancels, `q` goes back.
+- **Workers** - `GET /v1/workers` (defensive; shows an error if the route is
+  absent).
+- **Events** - SSE `GET /v1/events?after=<cursor>` with reconnect and backoff.
+
+Ctrl+1..5 jump to a view, Tab moves focus between the sidebar and the main area,
+Ctrl+C exits.
+
+## Notes
+
+- Node 26 type stripping runs `src/main.ts` directly; there is no build step.
+- `apps/tui` imports `OrchestratorClient`, `TasksPageModel`, and
+  `TaskDetailPageModel` from `apps/router/src`, plus the exact CLI config
+  helpers, by relative path instead of duplicating them. It does not modify
+  either app.
+- Pi stderr is captured while the app owns the alternate screen so
+  child-process diagnostics do not corrupt the display.

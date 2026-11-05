@@ -349,6 +349,18 @@ export interface WorkerHeartbeat {
   status?: "healthy" | "draining";
 }
 
+export type WorkerStatus = "healthy" | "draining" | "lost";
+
+export interface WorkerView {
+  worker_id: string;
+  url: string;
+  status: WorkerStatus;
+  running: number;
+  max_concurrency: number;
+  last_heartbeat: string;
+  version?: string | null;
+}
+
 export interface AssignmentHeartbeat {
   execution_id: string;
   phase?: "running" | "waiting" | "blocked";

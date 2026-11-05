@@ -13,6 +13,7 @@ super-rlm down            # stop background Orchestrator + Worker
 super-rlm status          # show background service health and PIDs
 super-rlm dev             # start Orchestrator + Worker in the foreground
 super-rlm tasks           # headless task list
+super-rlm tui             # launch the L3 terminal UI
 super-rlm doctor          # check project runtimes and services
 super-rlm init            # create .super-rlm-project.json + gitignore entry
 super-rlm bootstrap       # create the project kernel venv and install runtime/report skill
@@ -52,6 +53,13 @@ Set a non-default runtime root explicitly:
 SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm dev
 SUPER_RLM_HOME="$HOME/.super-rlm/projects/prj_demo" super-rlm
 ```
+
+## Terminal UI
+
+`super-rlm tui` starts the Orchestrator and Worker when needed, then launches
+the standalone L3 terminal UI from `apps/tui`. The UI reads the same
+`SUPER_RLM_*` configuration as the CLI and chats with the Router through the
+project Pi runtime. The default `super-rlm` command remains the Pi Router (L2).
 
 ## Bootstrap
 

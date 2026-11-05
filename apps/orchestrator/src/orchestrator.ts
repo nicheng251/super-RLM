@@ -22,6 +22,7 @@ import type {
   WorkerHeartbeat,
   WorkerRegistration,
   WorkerReport,
+  WorkerView,
 } from "../../../packages/protocol/ts/index.ts";
 import { Store } from "./db.ts";
 import { isCallbackEventType, OutboxDispatcher } from "./outbox.ts";
@@ -426,6 +427,18 @@ export class Orchestrator {
     this.store.updateTask(taskId, { status: "cancelled", updated_at: nowIso() });
     this.recordEvent({ type: "task.settled", task_id: taskId, data: { status: "cancelled", reason } });
     return this.getTask(taskId);
+  }
+
+  listWorkers(): WorkerView[] {
+    return this.store.listWorkers().map((worker) => ({
+      worker_id: worker.worker_id,
+      url: worker.url,
+      status: worker.status,
+      running: worker.running,
+      max_concurrency: worker.max_concurrency,
+      last_heartbeat: worker.last_heartbeat,
+      version: worker.version,
+    }));
   }
 
   registerWorker(input: WorkerRegistration): WorkerRecord {
