@@ -609,7 +609,9 @@ export class TuiApp {
     const model = this.detailModel;
     const task = model?.state.task ?? null;
     if (!task) {
-      this.detailPane.setLines([bold("Task Detail"), "", dim("Select a task from Tasks.")]);
+      this.detailPane.setLines(model
+        ? [bold(`Task ${model.taskId}`), "", dim("Loading...")]
+        : [bold("Task Detail"), "", dim("Select a task from Tasks.")]);
       return;
     }
     const lines = [
