@@ -9,6 +9,7 @@ export interface AppConfig {
   workspaceRoot: string;
   routerToken: string;
   workerToken: string;
+  callbackUrl: string | null;
   callbackKey: string;
   projectRepo: string | null;
   maxConcurrentTickets: number;
@@ -26,6 +27,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     workspaceRoot: env.SUPER_RLM_WORKSPACES ?? join(home, "workspaces"),
     routerToken: env.SUPER_RLM_ROUTER_TOKEN ?? "dev-router-token",
     workerToken: env.SUPER_RLM_WORKER_TOKEN ?? "dev-worker-token",
+    callbackUrl: env.SUPER_RLM_CALLBACK_URL?.trim() || null,
     callbackKey: env.SUPER_RLM_CALLBACK_KEY ?? "dev-callback-key",
     projectRepo: env.SUPER_RLM_PROJECT_REPO?.trim() || null,
     maxConcurrentTickets: Number(env.SUPER_RLM_MAX_CONCURRENT_TICKETS ?? "4"),

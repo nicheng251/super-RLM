@@ -204,6 +204,8 @@ test("HTTP profiles, unknown profile rejection, and dispatch execution options",
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
     projectRepo: "/tmp/super-rlm/repo",
+    callbackUrl: null,
+    callbackKey: "test-callback-key",
     profiles,
   }, dispatch);
   orchestrator.registerWorker({
@@ -294,6 +296,8 @@ test("an Orchestrator without profiles keeps the legacy env fallback", async () 
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
     projectRepo: null,
+    callbackUrl: null,
+    callbackKey: "test-callback-key",
   }, dispatch);
   orchestrator.registerWorker({
     worker_id: "wrk_legacy",
@@ -331,6 +335,8 @@ test("requires_repo profiles need a configured project repository", async () => 
       dispatchTimeoutMs: 1000,
       workspaceRoot: "/tmp/super-rlm/workspaces",
       projectRepo,
+      callbackUrl: null,
+      callbackKey: "test-callback-key",
       profiles,
     }, dispatch);
     orchestrator.registerWorker({

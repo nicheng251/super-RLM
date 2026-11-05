@@ -142,7 +142,7 @@ excludes transient files: `*.pid`, `*.lock`, `*.writer-lock`, `*.sock`,
 size and SHA-256.
 
 `restore` validates the manifest and all checksums before changing the current
-runtime. It refuses a schema newer than the running build (v4), stages the
+runtime. It refuses a schema newer than the running build (v5), stages the
 backup in a temporary directory, renames the current home to
 `<home>.pre-restore-<timestamp>`, then moves the staged copy into place. If the
 backup excluded secrets, the current `<home>/secrets` is copied into the

@@ -25,7 +25,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { CliConfig } from "../config.ts";
 
 export const SUPER_RLM_VERSION = "0.1.0";
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 const MANIFEST_NAME = "manifest.json";
 
 export interface BackupManifestFile {

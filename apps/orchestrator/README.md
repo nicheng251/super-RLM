@@ -28,7 +28,8 @@ bundled by the project.
 | `SUPER_RLM_WORKSPACES` | `<home>/workspaces` | Per-Ticket workspace root. |
 | `SUPER_RLM_ROUTER_TOKEN` | `dev-router-token` | Router bearer token. |
 | `SUPER_RLM_WORKER_TOKEN` | `dev-worker-token` | Worker/report bearer token. |
-| `SUPER_RLM_CALLBACK_KEY` | `dev-callback-key` | HMAC-SHA256 key for Worker reports. |
+| `SUPER_RLM_CALLBACK_KEY` | `dev-callback-key` | HMAC-SHA256 key for Worker reports and user callbacks. |
+| `SUPER_RLM_CALLBACK_URL` | unset | Optional HTTP endpoint for signed user callbacks. |
 | `SUPER_RLM_MAX_CONCURRENT_TICKETS` | `4` | Global running limit. |
 | `SUPER_RLM_MAX_CONCURRENT_TICKETS_PER_TASK` | `2` | Per-Task normal running limit. |
 | `SUPER_RLM_PRIORITY_RESERVED` | `1` | Slots reserved for answer/resume. |
@@ -42,7 +43,8 @@ validates each Ticket's `profile` (`default` when omitted), rejects unknown name
 with `unknown_profile`, and sends the resolved provider/model/thinking, timeout,
 prepare and blocked commands, workspace layout, and delivery policy as
 `ExecutionRequest.execution`. `GET /v1/profiles` exposes only the sanitized
-name, description, provider, model, and thinking fields.
+name, description, provider, model, thinking, capabilities, requires_repo,
+read_only, and write_files fields.
 
 ## Routes
 
@@ -78,7 +80,7 @@ POST /internal/v1/reports
 
 - Task/Ticket/Assignment state machine and derived Task status.
 - SQLite persistence with WAL and a schema-version row.
-- Forward-only migrations with a schema-version row (currently v3).
+- Forward-only migrations with a schema-version row (currently v5) and an automatic `VACUUM INTO` backup before upgrading an existing DB.
 - Single-instance lock file with stale-PID recovery.
 - Startup recovery for assignments left open by a previous Orchestrator process.
 - Global, per-Task, per-Worker, and priority slot accounting.
@@ -86,15 +88,15 @@ POST /internal/v1/reports
 - Report sequencing, idempotency, and state validation.
 - HITL answer/resume/retry/cancel.
 - Worker registry and heartbeat lease reaping.
-- Events table and task-scoped event reads.
-- Unit, integration, HTTP, and dispatch tests.
+- Events table, task-scoped event reads, SSE streaming, and cursor replay.
+- Durable outbox with HMAC-signed user callbacks (`ticket.waiting`, `ticket.blocked`, `ticket.settled`, `task.settled`) and retry/backoff.
+- Unit, integration, HTTP, dispatch, migration, and outbox tests.
 
 ## Deferred
 
-- Durable outbox beyond the open-assignment recovery pass.
-- SSE event streaming and cursor replay.
 - Scoped tokens and OIDC/mTLS.
-- Backup/restore and metrics.
+- Callback SSRF/allowlist policy for public endpoints.
+- Metrics and OpenTelemetry.
 
 ## Tests
 

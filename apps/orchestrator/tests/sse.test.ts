@@ -24,6 +24,8 @@ test("SSE streams task events with cursors", async () => {
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
     projectRepo: null,
+    callbackUrl: null,
+    callbackKey: "test-callback-key",
   }, dispatch);
   orchestrator.registerWorker({ worker_id: "wrk_sse", url: "http://fake", max_concurrency: 2, version: "test" });
   const server = createOrchestratorServer(orchestrator, {

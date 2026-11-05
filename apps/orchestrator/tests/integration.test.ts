@@ -22,6 +22,8 @@ function harness() {
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
     projectRepo: null,
+    callbackUrl: null,
+    callbackKey: "test-callback-key",
   }, dispatch);
   orchestrator.registerWorker({
     worker_id: "wrk_test",

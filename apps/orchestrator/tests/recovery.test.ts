@@ -34,6 +34,7 @@ function seed(retryCount = 0) {
     maxConcurrentTickets: 4, maxConcurrentTicketsPerTask: 2, priorityReserved: 1,
     workerLeaseMs: 30_000, dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces", projectRepo: null,
+    callbackUrl: null, callbackKey: "test-callback-key",
   }, dispatch);
   return { store, orchestrator };
 }

@@ -7,6 +7,8 @@
  * it only reads and writes rows.
  */
 
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { SQLInputValue } from "node:sqlite";
 import type {
@@ -18,7 +20,7 @@ import type {
 
 type Row = Record<string, unknown>;
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -140,9 +142,41 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS events_task_idx ON events(task_id);
 `;
 
+const OUTBOX_SCHEMA = `
+CREATE TABLE IF NOT EXISTS outbox (
+  outbox_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id INTEGER NOT NULL,
+  target TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  delivered_at TEXT,
+  UNIQUE(event_id, target)
+);
+CREATE INDEX IF NOT EXISTS outbox_status_next_idx ON outbox(status, next_attempt_at);
+`;
+
 export interface TaskListQuery {
   status?: string;
   limit?: number;
+}
+
+export interface OutboxRecord {
+  outbox_id: number;
+  event_id: number;
+  target: string;
+  payload: unknown;
+  attempts: number;
+  next_attempt_at: string;
+  status: "pending" | "failed" | "delivered";
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  delivered_at: string | null;
 }
 
 export class Store {
@@ -153,20 +187,65 @@ export class Store {
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA foreign_keys = ON");
     this.db.exec("PRAGMA busy_timeout = 5000");
-    this.db.exec(SCHEMA);
-    this.migrate();
-  }
-
-  private migrate(): void {
-    const row = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as Row | undefined;
-    const hasTickets = this.db.prepare(
-      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tickets'",
-    ).get() !== undefined;
-    let version = row ? Number(row.value) : (hasTickets ? 1 : 0);
-    if (!Number.isFinite(version)) version = 0;
+    const version = this.readSchemaVersion();
     if (version > SCHEMA_VERSION) {
       throw new Error(`Database schema v${version} is newer than this build (v${SCHEMA_VERSION})`);
     }
+    if (version > 0 && version < SCHEMA_VERSION) {
+      this.createPreMigrationBackup(path, version);
+    }
+    this.db.exec(SCHEMA);
+    this.migrate(version);
+  }
+
+  private readSchemaVersion(): number {
+    const hasMeta = this.db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'",
+    ).get() !== undefined;
+    if (hasMeta) {
+      const row = this.db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as Row | undefined;
+      const version = row ? Number(row.value) : 0;
+      if (Number.isFinite(version)) return version;
+    }
+    const hasTickets = this.db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tickets'",
+    ).get() !== undefined;
+    return hasTickets ? 1 : 0;
+  }
+
+  /**
+   * Snapshot an existing database before an upgrade. `VACUUM INTO` produces a
+   * consistent copy without WAL sidecar files; the sidecar JSON records what
+   * was migrated. Startup fails if the snapshot cannot be written.
+   */
+  private createPreMigrationBackup(path: string, oldVersion: number): void {
+    if (path === ":memory:") return;
+    const backupDir = join(dirname(path), "backups");
+    mkdirSync(backupDir, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = join(backupDir, `pre-migration-v${oldVersion}-${timestamp}.sqlite`);
+    let backupPath = base;
+    for (let index = 1; existsSync(backupPath); index += 1) {
+      backupPath = `${base}-${index}`;
+    }
+    try {
+      this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      this.db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
+      writeFileSync(`${backupPath}.json`, `${JSON.stringify({
+        source: resolve(path),
+        old_version: oldVersion,
+        target_version: SCHEMA_VERSION,
+        created_at: new Date().toISOString(),
+      }, null, 2)}\n`, "utf8");
+    } catch (error) {
+      rmSync(backupPath, { force: true });
+      rmSync(`${backupPath}.json`, { force: true });
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Pre-migration backup failed for ${path}: ${message}`, { cause: error });
+    }
+  }
+
+  private migrate(version: number): void {
     for (let next = version + 1; next <= SCHEMA_VERSION; next += 1) {
       this.applyMigration(next);
     }
@@ -188,6 +267,10 @@ export class Store {
     if (version === 4) {
       this.ensureColumn("tickets", "workspace_metadata", "TEXT");
       this.ensureColumn("tickets", "metadata_error", "TEXT");
+      return;
+    }
+    if (version === 5) {
+      this.db.exec(OUTBOX_SCHEMA);
       return;
     }
     // Version 1 is the base schema above.
@@ -487,6 +570,50 @@ export class Store {
     }));
   }
 
+  // ---- outbox ------------------------------------------------------------
+
+  enqueueOutbox(input: { eventId: number; target: string; payload: unknown; now?: string }): void {
+    const now = input.now ?? new Date().toISOString();
+    this.db.prepare(`
+      INSERT OR IGNORE INTO outbox (
+        event_id, target, payload, attempts, next_attempt_at, status,
+        last_error, created_at, updated_at, delivered_at
+      ) VALUES (?, ?, ?, 0, ?, 'pending', NULL, ?, ?, NULL)
+    `).run(input.eventId, input.target, JSON.stringify(input.payload), now, now, now);
+  }
+
+  dueOutbox(now: string, limit = 20): OutboxRecord[] {
+    const rows = this.db.prepare(`
+      SELECT * FROM outbox WHERE status = 'pending' AND next_attempt_at <= ?
+      ORDER BY outbox_id ASC LIMIT ?
+    `).all(now, Math.max(1, limit));
+    return (rows as Row[]).map(outboxFromRow);
+  }
+
+  getOutbox(outboxId: number): OutboxRecord | null {
+    const row = this.db.prepare("SELECT * FROM outbox WHERE outbox_id = ?").get(outboxId) as Row | undefined;
+    return row ? outboxFromRow(row) : null;
+  }
+
+  markOutboxDelivered(outboxId: number, now = new Date().toISOString()): void {
+    this.db.prepare(`
+      UPDATE outbox SET status = 'delivered', delivered_at = ?, updated_at = ?
+      WHERE outbox_id = ?
+    `).run(now, now, outboxId);
+  }
+
+  markOutboxFailed(
+    outboxId: number,
+    input: { attempts: number; nextAttemptAt: string; error: string; status?: "pending" | "failed" },
+    now = new Date().toISOString(),
+  ): void {
+    this.db.prepare(`
+      UPDATE outbox
+      SET attempts = ?, next_attempt_at = ?, last_error = ?, status = ?, updated_at = ?
+      WHERE outbox_id = ?
+    `).run(input.attempts, input.nextAttemptAt, input.error, input.status ?? "pending", now, outboxId);
+  }
+
   // ---- helpers -----------------------------------------------------------
 
   private updateRow(table: string, idColumn: string, id: string, fields: Record<string, unknown>): void {
@@ -566,6 +693,22 @@ function assignmentFromRow(row: Row): AssignmentRecord {
     resume_message: row.resume_message === null ? null : String(row.resume_message),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
+  };
+}
+
+function outboxFromRow(row: Row): OutboxRecord {
+  return {
+    outbox_id: Number(row.outbox_id),
+    event_id: Number(row.event_id),
+    target: String(row.target),
+    payload: parseJson(row.payload, null),
+    attempts: Number(row.attempts),
+    next_attempt_at: String(row.next_attempt_at),
+    status: row.status as OutboxRecord["status"],
+    last_error: row.last_error === null ? null : String(row.last_error),
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+    delivered_at: row.delivered_at === null ? null : String(row.delivered_at),
   };
 }
 

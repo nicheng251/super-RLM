@@ -33,6 +33,8 @@ test("the default dispatch posts the ExecutionRequest contract to a Worker", asy
     dispatchTimeoutMs: 1000,
     workspaceRoot: "/tmp/super-rlm/workspaces",
     projectRepo: null,
+    callbackUrl: null,
+    callbackKey: "test-callback-key",
   });
   try {
     orchestrator.registerWorker({

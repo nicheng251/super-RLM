@@ -38,10 +38,21 @@ async function main(): Promise<void> {
     dispatchTimeoutMs: 10_000,
     workspaceRoot: config.workspaceRoot,
     projectRepo: config.projectRepo,
+    callbackUrl: config.callbackUrl,
+    callbackKey: config.callbackKey,
     profiles,
   });
   orchestrator.recover();
   await orchestrator.schedule();
+
+  if (config.callbackUrl) {
+    await orchestrator.flushOutbox();
+    setInterval(() => {
+      void orchestrator.flushOutbox().catch((error: unknown) => {
+        console.error(error instanceof Error ? error.message : String(error));
+      });
+    }, 1000).unref();
+  }
 
   const server = createOrchestratorServer(orchestrator, {
     routerToken: config.routerToken,

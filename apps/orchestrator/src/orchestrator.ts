@@ -24,6 +24,7 @@ import type {
   WorkerReport,
 } from "../../../packages/protocol/ts/index.ts";
 import { Store } from "./db.ts";
+import { isCallbackEventType, OutboxDispatcher } from "./outbox.ts";
 import {
   canStart,
   deriveTaskStatus,
@@ -84,6 +85,8 @@ export interface OrchestratorConfig {
   dispatchTimeoutMs: number;
   workspaceRoot: string;
   projectRepo: string | null;
+  callbackUrl: string | null;
+  callbackKey: string;
   profiles?: ProfilesConfig;
 }
 
@@ -94,6 +97,8 @@ export const DEFAULT_CONFIG: Omit<OrchestratorConfig, "workspaceRoot"> = {
   workerLeaseMs: 30_000,
   dispatchTimeoutMs: 10_000,
   projectRepo: null,
+  callbackUrl: null,
+  callbackKey: "dev-callback-key",
 };
 
 const BACKOFF_MS = [2_000, 5_000, 15_000];
@@ -147,12 +152,55 @@ export class Orchestrator {
   private readonly profiles: ProfilesConfig | null;
   private scheduling = false;
   private scheduleAgain = false;
+  private outbox: OutboxDispatcher | null = null;
 
   constructor(store: Store, config: OrchestratorConfig, dispatch: DispatchFn = defaultDispatch) {
     this.store = store;
     this.config = config;
     this.dispatch = dispatch;
     this.profiles = config.profiles ?? null;
+  }
+
+  /**
+   * Append an event and, for important event types, enqueue a durable user
+   * callback in the same synchronous step.
+   */
+  private recordEvent(event: {
+    type: string;
+    task_id?: string | null;
+    ticket_id?: string | null;
+    assignment_id?: string | null;
+    worker_id?: string | null;
+    data?: Record<string, unknown>;
+  }): number {
+    const eventId = this.store.appendEvent(event);
+    if (!this.config.callbackUrl || !isCallbackEventType(event.type)) return eventId;
+    this.store.enqueueOutbox({
+      eventId,
+      target: this.config.callbackUrl,
+      payload: {
+        event_id: eventId,
+        type: event.type,
+        task_id: event.task_id ?? null,
+        ticket_id: event.ticket_id ?? null,
+        assignment_id: event.assignment_id ?? null,
+        worker_id: event.worker_id ?? null,
+        data: event.data ?? {},
+        created_at: nowIso(),
+      },
+    });
+    return eventId;
+  }
+
+  /** Deliver due user callbacks; a no-op when no callback URL is configured. */
+  async flushOutbox(): Promise<void> {
+    if (!this.config.callbackUrl) return;
+    this.outbox ??= new OutboxDispatcher(
+      this.store,
+      this.config.callbackUrl,
+      this.config.callbackKey,
+    );
+    await this.outbox.flush();
   }
 
   private slotPolicy(): SlotPolicy {
@@ -247,11 +295,11 @@ export class Orchestrator {
     });
 
     this.store.insertTask(task, tickets);
-    this.store.appendEvent({
+    this.recordEvent({
       type: "task.created", task_id: taskId, data: { prompt: input.prompt, ticket_count: tickets.length },
     });
     for (const ticket of tickets) {
-      this.store.appendEvent({ type: "ticket.created", task_id: taskId, ticket_id: ticket.ticket_id });
+      this.recordEvent({ type: "ticket.created", task_id: taskId, ticket_id: ticket.ticket_id });
     }
     await this.schedule();
 
@@ -313,7 +361,7 @@ export class Orchestrator {
       resume_message: message,
       updated_at: nowIso(),
     });
-    this.store.appendEvent({ type: "ticket.updated", task_id: ticket.task_id, ticket_id: ticketId, data: { action: "answer" } });
+    this.recordEvent({ type: "ticket.updated", task_id: ticket.task_id, ticket_id: ticketId, data: { action: "answer" } });
     await this.schedule();
     return this.actionResult(ticketId);
   }
@@ -331,7 +379,7 @@ export class Orchestrator {
       resume_message: note,
       updated_at: nowIso(),
     });
-    this.store.appendEvent({ type: "ticket.updated", task_id: ticket.task_id, ticket_id: ticketId, data: { action: "resume" } });
+    this.recordEvent({ type: "ticket.updated", task_id: ticket.task_id, ticket_id: ticketId, data: { action: "resume" } });
     await this.schedule();
     return this.actionResult(ticketId);
   }
@@ -350,7 +398,7 @@ export class Orchestrator {
       resume_message: note,
       updated_at: nowIso(),
     });
-    this.store.appendEvent({ type: "ticket.updated", task_id: ticket.task_id, ticket_id: ticketId, data: { action: "retry" } });
+    this.recordEvent({ type: "ticket.updated", task_id: ticket.task_id, ticket_id: ticketId, data: { action: "retry" } });
     await this.schedule();
     return this.actionResult(ticketId);
   }
@@ -360,7 +408,7 @@ export class Orchestrator {
     if (isTerminalTicket(ticket.status)) return this.actionResult(ticketId);
     await this.endActiveAssignment(ticket, "cancelled", reason);
     this.store.updateTicket(ticketId, { status: "cancelled", updated_at: nowIso() });
-    this.store.appendEvent({
+    this.recordEvent({
       type: "ticket.settled", task_id: ticket.task_id, ticket_id: ticketId, data: { status: "cancelled", reason },
     });
     this.refreshTask(ticket.task_id);
@@ -376,7 +424,7 @@ export class Orchestrator {
       if (!isTerminalTicket(ticket.status)) await this.cancelTicket(ticket.ticket_id, reason);
     }
     this.store.updateTask(taskId, { status: "cancelled", updated_at: nowIso() });
-    this.store.appendEvent({ type: "task.settled", task_id: taskId, data: { status: "cancelled", reason } });
+    this.recordEvent({ type: "task.settled", task_id: taskId, data: { status: "cancelled", reason } });
     return this.getTask(taskId);
   }
 
@@ -392,7 +440,7 @@ export class Orchestrator {
       last_heartbeat: now,
     };
     this.store.upsertWorker(worker);
-    this.store.appendEvent({ type: "worker.registered", worker_id: worker.worker_id, data: { url: worker.url } });
+    this.recordEvent({ type: "worker.registered", worker_id: worker.worker_id, data: { url: worker.url } });
     void this.schedule();
     return worker;
   }
@@ -458,7 +506,7 @@ export class Orchestrator {
         metadata_error: report.metadata_error ?? ticket.metadata_error,
         updated_at: nowIso(),
       });
-      this.store.appendEvent({
+      this.recordEvent({
         type: "ticket.updated", task_id: ticket.task_id, ticket_id: ticket.ticket_id,
         assignment_id: assignment.assignment_id, data: { state: "progress" },
       });
@@ -496,18 +544,18 @@ export class Orchestrator {
         });
       }
     }
-    this.store.appendEvent({
+    this.recordEvent({
       type: "assignment.ended", task_id: ticket.task_id, ticket_id: ticket.ticket_id,
       assignment_id: assignment.assignment_id, worker_id: assignment.worker_id,
       data: { state: report.state, end_reason: outcome.endReason },
     });
     if (report.state === "waiting" || report.state === "blocked") {
-      this.store.appendEvent({
+      this.recordEvent({
         type: report.state === "waiting" ? "ticket.waiting" : "ticket.blocked",
         task_id: ticket.task_id, ticket_id: ticket.ticket_id, data: { question: report.question },
       });
     } else {
-      this.store.appendEvent({
+      this.recordEvent({
         type: "ticket.settled", task_id: ticket.task_id, ticket_id: ticket.ticket_id,
         data: { status: outcome.ticketStatus, outcome: outcome.outcome ?? null },
       });
@@ -541,7 +589,7 @@ export class Orchestrator {
           updated_at: nowIso(),
         });
       }
-      this.store.appendEvent({
+      this.recordEvent({
         type: "assignment.ended", task_id: ticket.task_id, ticket_id: ticket.ticket_id,
         assignment_id: assignment.assignment_id, worker_id: assignment.worker_id,
         data: { reason: "orchestrator_recovery" },
@@ -633,7 +681,7 @@ export class Orchestrator {
           running: this.store.countRunningForWorker(worker.worker_id),
           last_heartbeat: worker.last_heartbeat,
         });
-        this.store.appendEvent({
+        this.recordEvent({
           type: "assignment.started", task_id: ticket.task_id, ticket_id: ticket.ticket_id,
           assignment_id: assignment.assignment_id, worker_id: worker.worker_id,
           data: { kind, execution_id: result.executionId },
@@ -644,7 +692,7 @@ export class Orchestrator {
       this.store.updateAssignment(assignment.assignment_id, {
         status: "ended", end_reason: "failed", updated_at: nowIso(),
       });
-      this.store.appendEvent({
+      this.recordEvent({
         type: "assignment.ended", task_id: ticket.task_id, ticket_id: ticket.ticket_id,
         assignment_id: assignment.assignment_id, worker_id: worker.worker_id,
         data: { error: result.error, status: result.status },
@@ -681,7 +729,7 @@ export class Orchestrator {
       if (worker.status === "lost") continue;
       if (now - Date.parse(worker.last_heartbeat) <= this.config.workerLeaseMs) continue;
       this.store.updateWorker(worker.worker_id, { status: "lost", running: 0 });
-      this.store.appendEvent({ type: "worker.lost", worker_id: worker.worker_id });
+      this.recordEvent({ type: "worker.lost", worker_id: worker.worker_id });
       for (const assignment of this.store.listActiveAssignmentsForWorker(worker.worker_id)) {
         this.store.updateAssignment(assignment.assignment_id, {
           status: "ended", end_reason: "lost", updated_at: nowIso(),
@@ -750,9 +798,9 @@ export class Orchestrator {
     const status = deriveTaskStatus({ cancelled: task.cancel_requested, timedOut, tickets });
     if (status !== task.status) {
       this.store.updateTask(taskId, { status, updated_at: nowIso() });
-      this.store.appendEvent({ type: "task.updated", task_id: taskId, data: { status } });
+      this.recordEvent({ type: "task.updated", task_id: taskId, data: { status } });
       if (isTerminalTask(status)) {
-        this.store.appendEvent({ type: "task.settled", task_id: taskId, data: { status } });
+        this.recordEvent({ type: "task.settled", task_id: taskId, data: { status } });
       }
       return { task: { ...task, status }, tickets };
     }
