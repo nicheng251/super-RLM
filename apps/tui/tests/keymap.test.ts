@@ -28,6 +28,7 @@ test("navigation and ticket actions depend on the active view", () => {
   assert.equal(mapKey("\x1b", tasks), null);
 
   const detail: KeyContext = { view: "detail", focus: "main", piRunning: false };
+  assert.deepEqual(mapKey("\x1b", detail), { kind: "view", view: "tasks" });
   assert.deepEqual(mapKey("a", detail), { kind: "answer" });
   assert.deepEqual(mapKey("s", detail), { kind: "resume" });
   assert.deepEqual(mapKey("t", detail), { kind: "retry" });

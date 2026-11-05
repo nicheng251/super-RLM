@@ -72,6 +72,7 @@ export function mapKey(data: string, context: KeyContext): Action | null {
   }
   if (matchesKey(data, Key.enter) && context.view === "tasks") return { kind: "activate" };
   if (context.view === "detail") {
+    if (matchesKey(data, Key.escape)) return { kind: "view", view: "tasks" };
     if (matchesKey(data, "a")) return { kind: "answer" };
     if (matchesKey(data, "s")) return { kind: "resume" };
     if (matchesKey(data, "t")) return { kind: "retry" };

@@ -75,6 +75,7 @@ Alt+2         Tasks
 Alt+3         Workers
 Alt+4         Events
 Enter         open the selected Task's Detail subpage
+Esc           in Task Detail, return to Tasks
 /             command mode (type /command in Chat)
 Ctrl+C        exit
 Esc           back / abort Chat turn
